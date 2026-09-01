@@ -32,7 +32,7 @@
   .slot canvas { image-rendering:pixelated; }
   #itemName { position:fixed; bottom:86px; left:50%; transform:translateX(-50%);
               font-size:24px; color:#fff; text-shadow:2px 2px 0 rgba(0,0,0,.8);
-              opacity:0; transition:opacity .5s; }
+              opacity:0; transition:opacity .5s; text-align:center; }
 
   /* ---------- Меню ---------- */
   #menu { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -55,13 +55,13 @@
   kbd { font-family:'VT323', monospace; font-size:18px; color:#f0f0f0; background:rgba(20,22,20,.85);
         border:1px solid #6a6a6a; border-bottom:3px solid #3c3c3c; padding:0 8px; border-radius:3px; min-width:30px; text-align:center; }
   #menuFooter { position:absolute; bottom:14px; font-size:19px; color:#aab3a5; text-shadow:1px 1px 0 rgba(0,0,0,.8); }
-  #hint { margin-top:20px; font-size:19px; color:#9aa795; text-shadow:1px 1px 0 rgba(0,0,0,.8); }
+  #hint { margin-top:20px; font-size:19px; color:#9aa795; text-shadow:1px 1px 0 rgba(0,0,0,.8); text-align:center; }
 
   /* ---------- Пауза ---------- */
   #pause { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
            background:rgba(5,7,9,.55); z-index:9; }
   #pause h2 { font-family:'Press Start 2P', monospace; font-size:26px; color:#e6e9ea; text-shadow:4px 4px 0 rgba(0,0,0,.7); margin-bottom:34px; }
-  #pause .tip { margin-top:22px; font-size:20px; color:#b9c4b4; text-shadow:1px 1px 0 rgba(0,0,0,.8); }
+  #pause .tip { margin-top:22px; font-size:20px; color:#b9c4b4; text-shadow:1px 1px 0 rgba(0,0,0,.8); text-align:center; line-height:1.35; }
 </style>
 </head>
 <body>
@@ -91,14 +91,19 @@
     <div><kbd>F</kbd> / <kbd>2×Пробел</kbd> полёт</div>
     <div><kbd>Esc</kbd> пауза</div>
   </div>
-  <div id="hint">В полёте: Пробел — вверх, C — вниз</div>
+  <div id="hint">В полёте: Пробел — вверх, C — вниз<br>Если превью блокирует мышь — камера крутится перетаскиванием</div>
   <div id="menuFooter">Бесконечный мир • День и ночь • Сид <span id="seedLabel"></span></div>
 </div>
 
 <div id="pause">
   <h2>Пауза</h2>
   <button id="resumeBtn" class="mcbtn">Продолжить</button>
-  <div class="tip">Нажми Esc, чтобы снова поставить игру на паузу</div>
+  <div class="tip" id="fbTip" style="display:none">
+    Захват мыши заблокирован этим окном (превью в iframe).<br>
+    Обзор: <b>зажми кнопку мыши и веди</b> • Короткий клик — сломать (ЛКМ) / поставить (ПКМ)<br>
+    Полный захват мыши работает, если открыть файл напрямую в браузере
+  </div>
+  <div class="tip">Esc — пауза • F или 2×Пробел — полёт</div>
 </div>
 
 <script type="importmap">
@@ -164,7 +169,7 @@ const OPAQUE = new Array(16).fill(true);
 OPAQUE[B.AIR]=OPAQUE[B.LEAVES]=OPAQUE[B.WATER]=OPAQUE[B.GLASS]=false;
 const SOLID = new Array(16).fill(true);
 SOLID[B.AIR]=SOLID[B.WATER]=false;
-const AOS = OPAQUE.slice(); AOS[B.LEAVES]=true; // листва даёт тень (AO)
+const AOS = OPAQUE.slice(); AOS[B.LEAVES]=true;
 const HOTBAR = [B.GRASS,B.STONE,B.COBBLE,B.PLANKS,B.LOG,B.LEAVES,B.GLASS,B.SAND,B.BRICK];
 
 /* ============================================================
@@ -180,9 +185,9 @@ function mulberry32(a){
 }
 const atlas = document.createElement('canvas');
 atlas.width = atlas.height = 256;
-const actx = atlas.getContext('2d');
-const aimg = actx.createImageData(256,256);
-const AVG = []; // средний цвет тайла (для частиц)
+const actx2d = atlas.getContext('2d');
+const aimg = actx2d.createImageData(256,256);
+const AVG = [];
 
 function setTile(tile, fn){
   const tx=(tile&15)*16, ty=(tile>>4)*16;
@@ -199,9 +204,7 @@ function setTile(tile, fn){
 }
 const P8 = v => clamp(v|0, 0, 255);
 
-// 0 — верх дёрна
 setTile(0,(x,y,r)=>{ const v=r(); return [P8(84+v*38), P8(146+v*48), P8(54+v*30)]; });
-// 1 — бок дёрна (рваная зелёная кромка)
 {
   const rr = mulberry32(SEED ^ 0xA17);
   const gd = Array.from({length:16}, ()=> 2 + (rr()*3|0));
@@ -211,49 +214,36 @@ setTile(0,(x,y,r)=>{ const v=r(); return [P8(84+v*38), P8(146+v*48), P8(54+v*30)
     return [P8(122+v*32), P8(86+v*26), P8(58+v*20)];
   });
 }
-// 2 — земля
 setTile(2,(x,y,r)=>{ const v=r(); return r()<0.06 ? [92,92,96] : [P8(122+v*34), P8(86+v*26), P8(58+v*20)]; });
-// 3 — камень
 setTile(3,(x,y,r)=>{ const v=r(); const g=P8(112+v*34-(r()<0.08?28:0)); return [g,g,g+3]; });
-// 4 — песок
 setTile(4,(x,y,r)=>{ const v=r(); return [P8(210+v*20), P8(196+v*18), P8(148+v*18)]; });
-// 5 — бревно (кора)
 setTile(5,(x,y,r)=>{ const v=r(); const b=(x%4<2)?-16:9;
   return [P8(108+b+v*14), P8(83+b*0.7+v*10), P8(49+b*0.5+v*8)]; });
-// 6 — спил бревна (кольца)
 setTile(6,(x,y,r)=>{ const d=Math.max(Math.abs(x-7.5),Math.abs(y-7.5)); const v=r();
   if(d>6.5) return [P8(104+v*14), P8(79+v*10), P8(46+v*8)];
   return ((d|0)%2) ? [P8(172+v*14),P8(138+v*12),P8(86+v*10)] : [P8(143+v*12),P8(112+v*10),P8(66+v*8)]; });
-// 7 — листва
 setTile(7,(x,y,r)=>{ const v=r(); return r()<0.24 ? [40,86,32] : [P8(52+v*30), P8(108+v*42), P8(36+v*24)]; });
-// 8 — вода
 setTile(8,(x,y,r)=>{ const v=r(); const w=((y+((x/4)|0))%8<1)?14:0;
   return [P8(44+v*14+w), P8(94+v*24+w), P8(188+v*28+w)]; });
-// 9 — доски
 setTile(9,(x,y,r)=>{ const v=r();
   if(y%4===3) return [96+v*10,72+v*8,42+v*6];
   if(x===((y>>2)*5+3)%16) return [110,84,50];
   return [P8(166+v*24), P8(130+v*18), P8(80+v*14)]; });
-// 10 — булыжник
 setTile(10,(x,y,r)=>{ const v=r(); const border=(x%4===0||y%4===0);
   const cell=hash2s(x>>2,y>>2,99)*26-13; const g=P8(border?70+v*14:116+v*22+cell);
   return [g,g,g]; });
-// 11 — стекло
 setTile(11,(x,y,r)=>{
   if(x===0||y===0||x===15||y===15) return [208,230,240,255];
   if((x-y===4||x-y===5)&&x<12) return [238,246,250,255];
   return [0,0,0,0];
 });
-// 12 — кирпич
 setTile(12,(x,y,r)=>{ const v=r(); const row=y>>2; const off=(row%2)?4:0;
   if(y%4===3 || (x+off)%8===0) return [184+v*10,178+v*10,170+v*10];
   return [P8(146+v*24), P8(66+v*14), P8(56+v*12)]; });
-// 13 — снег
 setTile(13,(x,y,r)=>{ const v=r(); return [P8(234+v*18), P8(240+v*14), P8(247+v*8)]; });
-// 14 — бедрок
 setTile(14,(x,y,r)=>{ const v=r(); const g=v<0.35?P8(40+v*20):v<0.75?P8(62+v*18):P8(92+v*20); return [g,g,g]; });
 
-actx.putImageData(aimg,0,0);
+actx2d.putImageData(aimg,0,0);
 const atlasTex = new THREE.CanvasTexture(atlas);
 atlasTex.magFilter = atlasTex.minFilter = THREE.NearestFilter;
 atlasTex.generateMipmaps = false;
@@ -313,9 +303,9 @@ function placeTree(data,cx,cz,wx,wy,wz){
     const top = ly>=wy+th;
     const r = top?1:2;
     for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){
-      if(!top && dx===0 && dz===0) continue;                       // там ствол
-      if(ly===wy+th+1 && Math.abs(dx)+Math.abs(dz)>1) continue;    // макушка — крест
-      if(Math.abs(dx)===r && Math.abs(dz)===r && hash2s(wx+dx,wz+dz,ly)<0.5) continue; // рваные углы
+      if(!top && dx===0 && dz===0) continue;
+      if(ly===wy+th+1 && Math.abs(dx)+Math.abs(dz)>1) continue;
+      if(Math.abs(dx)===r && Math.abs(dz)===r && hash2s(wx+dx,wz+dz,ly)<0.5) continue;
       setInChunk(data,cx,cz,wx+dx,ly,wz+dz,B.LEAVES,true);
     }
   }
@@ -337,13 +327,11 @@ function genChunk(cx,cz){
     }
     for(let y=h+1;y<=SEA;y++) data[(y*16+z)*16+x]=B.WATER;
   }
-  // деревья (в расширенной зоне, чтобы кроны переходили через границы чанков)
   for(let dx=-3;dx<19;dx++) for(let dz=-3;dz<19;dz++){
     const wx=cx*16+dx, wz=cz*16+dz;
     const h = terrainHeight(wx,wz);
     if(h>SEA+1 && h<46 && hash2s(wx,wz,11)<0.0085) placeTree(data,cx,cz,wx,h,wz);
   }
-  // верхняя занятая высота — чтобы мешер не гонял пустоту
   let maxY=0;
   for(let y=CY-1;y>=0;y--){ let any=false;
     for(let i=0;i<256;i++) if(data[y*256+i]){ any=true; break; }
@@ -458,7 +446,6 @@ function buildChunk(c){
     }
   }
 
-  // пересборка мешей
   if(c.mesh){ scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh=null; }
   if(c.water){ scene.remove(c.water); c.water.geometry.dispose(); c.water=null; }
   function makeGeo(p,cl,u,i){
@@ -552,7 +539,6 @@ const starsMat = new THREE.PointsMaterial({color:0xffffff, size:1.8, sizeAttenua
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sp),3));
   sky.add(new THREE.Points(g, starsMat));
 }
-// облака — бесшовная пиксельная текстура
 const cloudTex = (()=>{
   const cnv=document.createElement('canvas'); cnv.width=cnv.height=128;
   const ctx=cnv.getContext('2d'); const img=ctx.createImageData(128,128);
@@ -577,7 +563,6 @@ const cloudMat = new THREE.MeshBasicMaterial({map:cloudTex, transparent:true, op
 const clouds = new THREE.Mesh(new THREE.PlaneGeometry(2048,2048), cloudMat);
 clouds.rotation.x=-Math.PI/2; clouds.position.y=76; scene.add(clouds);
 
-// подсветка блока под прицелом
 const hl = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004,1.004,1.004)),
   new THREE.LineBasicMaterial({color:0x000000, transparent:true, opacity:0.55}));
@@ -710,13 +695,14 @@ addEventListener('keydown',e=>{
     if(now-lastSpace<0.28){ player.fly=!player.fly; player.vel.y=0; }
     lastSpace=now;
   }
+  if(e.code==='Escape' && started && fallback){ setPlaying(!playing); }
   if(e.code.startsWith('Digit')){
     const d=+e.code.slice(5);
     if(d>=1 && d<=9) selectSlot(d-1);
   }
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; mouseBtn[0]=mouseBtn[2]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; mouseBtn[0]=mouseBtn[2]=false; drag.down=false; });
 let lastSpace=-1;
 
 function isWaterAt(x,y,z){ return getBlock(Math.floor(x),Math.floor(y),Math.floor(z))===B.WATER; }
@@ -787,19 +773,15 @@ function updatePlayer(dt){
     moveAxis('x',player.vel.x*dt/steps);
     moveAxis('z',player.vel.z*dt/steps);
   }
-  // выбраться из воды на берег
   if(inWater && wallHit && key('Space')) player.vel.y=Math.max(player.vel.y,6.8);
-  // звук приземления
   if(!wasGround && player.onGround && lastVy<-9) sfx('land');
 
-  // шаги
   const hSpeed=Math.hypot(player.vel.x,player.vel.z);
   if(player.onGround && hSpeed>1.5){
     stepAcc+=hSpeed*dt;
     if(stepAcc>2.1){ stepAcc=0; sfx('step'); }
   } else stepAcc=0;
 
-  // покачивание камеры
   const bobTarget=(player.onGround&&hSpeed>0.5)?Math.min(1,hSpeed/4.3):0;
   bobK += (bobTarget-bobK)*Math.min(1,dt*8);
   bobT += hSpeed*dt*1.7;
@@ -809,7 +791,6 @@ function updatePlayer(dt){
   camera.position.set(player.pos.x, player.pos.y+1.62+bobY, player.pos.z);
   camera.rotation.set(pitch, yaw, roll);
 
-  // FOV при спринте
   const tf=75+(sprint&&hSpeed>5?8:0)+(player.fly?4:0);
   if(Math.abs(camera.fov-tf)>0.01){
     camera.fov += (tf-camera.fov)*Math.min(1,dt*9);
@@ -847,7 +828,6 @@ function boxIntersectsPlayer(bx,by,bz){
 function doMine(){
   const hit=raycastBlock();
   if(!hit || hit.b===B.BEDROCK) return;
-  // если рядом вода — затопить
   let nb=B.AIR;
   for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]])
     if(getBlock(hit.x+dx,hit.y+dy,hit.z+dz)===B.WATER){ nb=B.WATER; break; }
@@ -869,15 +849,39 @@ function doPlace(){
 
 const mouseBtn=[false,false,false];
 let lastMine=0, lastPlace=0;
+const drag={down:false, moved:false, acc:0};
 addEventListener('mousedown',e=>{
   if(!playing) return;
+  if(fallback){
+    drag.down=true; drag.moved=false; drag.acc=0;
+    return;
+  }
   if(e.button===0){ mouseBtn[0]=true; doMine(); lastMine=performance.now()/1000; }
   if(e.button===2){ mouseBtn[2]=true; doPlace(); lastPlace=performance.now()/1000; }
 });
-addEventListener('mouseup',e=>{ mouseBtn[e.button]=false; });
+addEventListener('mouseup',e=>{
+  if(fallback){
+    if(drag.down && !drag.moved){
+      if(e.button===0) doMine();
+      else if(e.button===2) doPlace();
+    }
+    drag.down=false;
+    return;
+  }
+  mouseBtn[e.button]=false;
+});
 addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('mousemove',e=>{
   if(!playing) return;
+  if(fallback){
+    if(!drag.down) return;
+    yaw   -= e.movementX*0.0024;
+    pitch -= e.movementY*0.0024;
+    pitch = clamp(pitch,-Math.PI/2+0.01,Math.PI/2-0.01);
+    drag.acc += Math.abs(e.movementX)+Math.abs(e.movementY);
+    if(drag.acc>5) drag.moved=true;
+    return;
+  }
   yaw   -= e.movementX*0.0024;
   pitch -= e.movementY*0.0024;
   pitch = clamp(pitch,-Math.PI/2+0.01,Math.PI/2-0.01);
@@ -890,12 +894,14 @@ function updateInteraction(t){
     hl.position.set(hit.x+0.5,hit.y+0.5,hit.z+0.5);
     hl.material.opacity=0.4+0.2*Math.sin(t*6);
   } else hl.visible=false;
-  if(mouseBtn[0] && t-lastMine>=0.24){ lastMine=t; doMine(); }
-  if(mouseBtn[2] && t-lastPlace>=0.24){ lastPlace=t; doPlace(); }
+  if(!fallback){
+    if(mouseBtn[0] && t-lastMine>=0.24){ lastMine=t; doMine(); }
+    if(mouseBtn[2] && t-lastPlace>=0.24){ lastPlace=t; doPlace(); }
+  }
 }
 
 /* ============================================================
-   UI: хотбар, иконки, меню, пауза, HUD
+   UI: хотбар, иконки
 ============================================================ */
 function drawIsoIcon(cnv, bId){
   const ctx=cnv.getContext('2d');
@@ -941,19 +947,60 @@ addEventListener('wheel',e=>{
   selectSlot((slot + (e.deltaY>0?1:8))%9);
 });
 
+/* ============================================================
+   МЕНЮ / ПАУЗА / ЗАХВАТ МЫСИ (+ fallback для iframe)
+============================================================ */
 const menuEl=document.getElementById('menu');
 const pauseEl=document.getElementById('pause');
 const hudEl=document.getElementById('hud');
-const waterOverlay=document.getElementById('waterOverlay');
 const statsEl=document.getElementById('stats');
-let started=false, playing=false, locked=false;
+const waterOverlay=document.getElementById('waterOverlay');
+let started=false, playing=false, locked=false, fallback=false;
 
+function applyUIState(){
+  menuEl.style.display  = started ? 'none' : 'flex';
+  pauseEl.style.display = (started && !playing) ? 'flex' : 'none';
+  hudEl.style.display   = playing ? 'block' : 'none';
+}
+function setPlaying(p){
+  playing=p;
+  if(!p){
+    for(const k in keys) keys[k]=false;
+    mouseBtn[0]=mouseBtn[2]=false;
+    drag.down=false;
+  }
+  applyUIState();
+}
+function enterFallback(){
+  if(fallback) return;
+  fallback=true;
+  canvas.style.cursor='crosshair';
+  document.getElementById('fbTip').style.display='block';
+  if(started){
+    setPlaying(true);
+    itemNameEl.textContent='Тяни мышью с зажатой кнопкой — обзор. Короткий клик — действие.';
+    itemNameEl.style.opacity=1;
+    clearTimeout(itemNameTimer);
+    itemNameTimer=setTimeout(()=>itemNameEl.style.opacity=0, 3500);
+  }
+}
 function lockPointer(){
-  const p=canvas.requestPointerLock();
-  if(p && p.catch) p.catch(()=>{});
+  if(fallback){ if(started) setPlaying(true); return; }
+  let settled=false;
+  try{
+    const p=canvas.requestPointerLock();
+    if(p && p.then){
+      p.then(()=>{ settled=true; })
+       .catch(()=>{ settled=true; enterFallback(); });
+    }
+  }catch(err){ enterFallback(); return; }
+  // если браузер молча игнорирует захват (песочница) — уходим в fallback
+  setTimeout(()=>{
+    if(!settled && document.pointerLockElement!==canvas) enterFallback();
+  }, 400);
 }
 document.getElementById('playBtn').addEventListener('click',()=>{
-  ac(); // разбудить звук жестом пользователя
+  ac();
   started=true;
   yaw=Math.random()*Math.PI*2; pitch=-0.12;
   lockPointer();
@@ -961,13 +1008,10 @@ document.getElementById('playBtn').addEventListener('click',()=>{
 document.getElementById('resumeBtn').addEventListener('click',lockPointer);
 document.addEventListener('pointerlockchange',()=>{
   locked = document.pointerLockElement===canvas;
-  playing = started && locked;
-  if(started){
-    menuEl.style.display='none';
-    pauseEl.style.display=playing?'none':'flex';
-    hudEl.style.display=playing?'block':'none';
-  }
+  if(locked) setPlaying(true);
+  else if(!fallback && started) setPlaying(false);
 });
+document.addEventListener('pointerlockerror', ()=>enterFallback());
 
 let fpsFrames=0, fpsTime=0, fpsVal=0, statTimer=0;
 function updateHUD(dt){
