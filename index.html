@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Minecraft — браузерная 3D-версия</title>
+<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
@@ -64,7 +65,7 @@
   #controls div { display:flex; align-items:center; gap:9px; }
   kbd { font-family:'VT323', monospace; font-size:18px; color:#f0f0f0; background:rgba(20,22,20,.85);
         border:1px solid #6a6a6a; border-bottom:3px solid #3c3c3c; padding:0 8px; border-radius:3px; min-width:30px; text-align:center; }
-  .menuFooter { position:absolute; bottom:14px; font-size:19px; color:#aab3a5; text-shadow:1px 1px 0 rgba(0,0,0,.8); }
+  .menuFooter { position:absolute; bottom:14px; font-size:19px; color:#aab3a5; text-shadow:1px 1px 0 rgba(0,0,0,.8); text-align:center; }
   #hint { margin-top:18px; font-size:19px; color:#9aa795; text-shadow:1px 1px 0 rgba(0,0,0,.8); text-align:center; }
 
   /* ---------- Создание мира ---------- */
@@ -131,7 +132,7 @@
     <div><kbd>Esc</kbd> пауза</div>
   </div>
   <div id="hint">Творческий полёт: Пробел — вверх, C — вниз<br>Если превью блокирует мышь — камера крутится перетаскиванием</div>
-  <div class="menuFooter">День и ночь • Процедурные текстуры и звук</div>
+  <div class="menuFooter">День и ночь • Процедурные текстуры и звук<br>Сид мира: <span id="seedLabel">—</span></div>
 </div>
 
 <div id="createScreen" class="screen">
@@ -212,9 +213,15 @@ const game = { mode:'survival', worldName:'Новый мир' };
 const MODE_NAMES = { survival:'Выживание', creative:'Творческий' };
 let screenState='title', worldCreated=false, dead=false, playing=false, locked=false, fallback=false;
 
+const seedLabelEl = document.getElementById('seedLabel');
+function setSeedLabel(){ if(seedLabelEl) seedLabelEl.textContent = SEED; }
+
 const SPLASHES = ['Работает прямо в браузере!','Без единой текстуры!','Копай глубже!',
   'Бесконечный мир!','Осторожно, высота!','Пиксели навсегда!','Сид решает всё!','Сделано на Three.js!'];
-document.getElementById('splash').textContent = SPLASHES[(Math.random()*SPLASHES.length)|0];
+{
+  const sp = document.getElementById('splash');
+  if(sp) sp.textContent = SPLASHES[(Math.random()*SPLASHES.length)|0];
+}
 
 const VIEW=5, CY=64, SEA=23, DAY_LEN=480;
 
@@ -284,7 +291,7 @@ const HARDNESS = {
   [B.LEAVES]:0.2,[B.STONE]:2.0,[B.COBBLE]:2.2,[B.BRICK]:2.2,[B.GLASS]:0.4,
   [B.SNOW]:0.3,[B.BEDROCK]:Infinity,[B.WATER]:Infinity
 };
-const DROPS = { [B.GRASS]:B.DIRT, [B.STONE]:B.COBBLE }; // остальные блоки выпадают сами
+const DROPS = { [B.GRASS]:B.DIRT, [B.STONE]:B.COBBLE };
 
 /* ============================================================
    АТЛАС ТЕКСТУР (процедурный, пересобирается под сид)
@@ -962,7 +969,6 @@ function updatePlayer(dt){
   if(inWater && wallHit && key('Space')) player.vel.y=Math.max(player.vel.y,6.8);
   if(!wasGround && player.onGround && lastVy<-9) sfx('land');
 
-  // урон от падения (только выживание)
   const landed = !wasGround && player.onGround;
   if(landed && game.mode==='survival' && player.falling){
     const d = player.fallStartY - player.pos.y;
@@ -1406,7 +1412,7 @@ document.getElementById('deathMenuBtn').addEventListener('click',toMainMenu);
 /* ---------- сброс мира под новый сид/режим ---------- */
 function resetWorld(seed){
   SEED=seed|0;
-  document.getElementById('seedLabel').textContent=SEED;
+  setSeedLabel();
   buildAtlas();
   rebuildClouds();
   for(const c of chunks.values()) disposeMeshes(c);
@@ -1531,7 +1537,7 @@ function loop(now){
 /* ============================================================
    СТАРТ
 ============================================================ */
-document.getElementById('seedLabel').textContent=SEED;
+setSeedLabel();
 spawnPos=findSpawn();
 player.pos.set(spawnPos.x,spawnPos.y,spawnPos.z);
 rebuildClouds();
