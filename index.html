@@ -87,10 +87,10 @@
             border-radius:9px; }
   #btnInv svg { width:22px; height:22px; }
 
-  /* ---------- Инвентарь / крафт / печь ---------- */
+  /* ---------- Инвентарь / крафт / печь / сундук ---------- */
   #invScreen { background:rgba(8,10,12,.55); z-index:12; }
   #invPanel { background:#c6c6c6; border:3px solid; border-color:#ffffff #555555 #555555 #ffffff;
-              padding:10px 12px 12px; color:#333; width:min(96vw, 640px);
+              padding:10px 12px 12px; color:#333; width:min(96vw, 660px);
               max-height:94vh; overflow:auto; }
   #invHead { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
   #invTitle { font-family:'Press Start 2P', monospace; font-size:13px; color:#3c3c3c; }
@@ -103,6 +103,8 @@
   #craftArrow { width:26px; height:26px; }
   #craftOutSlot { outline:2px solid #7a7a7a; outline-offset:1px; }
   #furnArea { display:none; align-items:flex-start; gap:16px; margin:4px 0 10px; }
+  #chestArea { display:none; margin:4px 0 10px; }
+  #chestGrid { display:grid; grid-template-columns:repeat(9, var(--sl)); gap:2px; }
   .fcol { display:flex; flex-direction:column; align-items:center; gap:5px; }
   #flameBar { width:16px; height:26px; background:#5f5f5f; position:relative; border:2px solid #3c3c3c; }
   #flameFill { position:absolute; bottom:0; left:0; right:0; height:0%; background:#e2762c; }
@@ -175,7 +177,6 @@
   #death h2 { font-size:34px; }
   #deathCause { font-size:24px; color:#ffdada; text-shadow:1px 1px 0 rgba(0,0,0,.8); margin-bottom:32px; }
 
-  /* ---------- Адаптация ---------- */
   @media (max-width:820px) {
     #controls { display:none; }
     #splash { right:-20px; bottom:-10px; font-size:19px; }
@@ -271,6 +272,10 @@
             <div id="foutWrap"></div>
           </div>
         </div>
+        <div id="chestArea">
+          <div id="gridLabels">Сундук</div>
+          <div id="chestGrid"></div>
+        </div>
       </div>
       <div>
         <div id="gridLabels">Хранилище</div>
@@ -297,14 +302,14 @@
     <div><kbd>W A S D</kbd> движение</div>
     <div><kbd>ЛКМ</kbd> ломать / бить животных</div>
     <div><kbd>Пробел</kbd> прыжок</div>
-    <div><kbd>ПКМ</kbd> поставить / верстак / печь / еда</div>
+    <div><kbd>ПКМ</kbd> поставить / верстак / печь / сундук / еда / ведро</div>
     <div><kbd>E</kbd> инвентарь и крафт 2×2</div>
     <div><kbd>Shift</kbd> спринт (тратит голод)</div>
     <div><kbd>F</kbd> полёт (только творческий)</div>
     <div><kbd>Esc</kbd> пауза</div>
   </div>
-  <div id="hint">Ищи пещеры и руду под землёй • Верастан из 4 досок, печь из 8 булыжника<br>Животные дают мясо • Жаркое насыщает лучше сырого</div>
-  <div class="menuFooter">День и ночь • Пещеры, руды, животные, печь, голод<br>Сид мира: <span id="seedLabel">—</span></div>
+  <div id="hint">Путь: дерево → камень → железо (глубже 26) → алмазы (глубже 14)<br>Ведро: 3 слитка буквой П • Сундук: 8 досок кольцом • Цель: полный алмазный сет</div>
+  <div class="menuFooter">Пещеры • Руды • Животные • Печь • Голод • Сундук • Ведро<br>Сид мира: <span id="seedLabel">—</span></div>
 </div>
 
 <div id="createScreen" class="screen">
@@ -321,11 +326,10 @@
     <div class="modeCard sel" data-mode="survival">
       <h3>ВЫЖИВАНИЕ</h3>
       <ul>
-        <li>Здоровье, урон, воздух</li>
-        <li>Голод и еда</li>
-        <li>Пещеры, уголь и железо</li>
-        <li>Крафт, верстак, печь</li>
-        <li>Животные: свинья, корова, курица</li>
+        <li>Пещеры: уголь, железо, алмазы</li>
+        <li>Верстак, печь, сундук, ведро</li>
+        <li>Животные и голод</li>
+        <li>Цель: алмазный сет</li>
       </ul>
     </div>
     <div class="modeCard" data-mode="creative">
@@ -353,10 +357,9 @@
   </div>
   <div class="tip" id="fbTip" style="display:none">
     Захват мыши заблокирован этим окном (превью в iframe).<br>
-    Обзор: <b>зажми кнопку мыши и веди</b> • Клик — действие • В выживании <b>удерживай ЛКМ</b> для добычи<br>
-    Полный захват мыши работает, если открыть файл напрямую в браузере
+    Обзор: <b>зажми кнопку мыши и веди</b> • Клик — действие • В выживании <b>удерживай ЛКМ</b> для добычи
   </div>
-  <div class="tip">E — инвентарь • ПКМ по верстаку — 3×3 • ПКМ по печи — плавка</div>
+  <div class="tip">E — инвентарь • ПКМ: верстак 3×3, печь, сундук, еда, ведро</div>
 </div>
 
 <div id="death" class="screen">
@@ -403,8 +406,8 @@ let invOpen=false, uiMode='inv2';
 const seedLabelEl = document.getElementById('seedLabel');
 function setSeedLabel(){ if(seedLabelEl) seedLabelEl.textContent = SEED; }
 
-const SPLASHES = ['Скрафти кирку!','Копай глубже!','Железо ждёт!','Бесконечный мир!',
-  'Осторожно, высота!','Пиксели навсегда!','Сид решает всё!','Свинья одобряет!'];
+const SPLASHES = ['Копай до алмазов!','Железо глубже!','Веди́ро!','Бесконечный мир!',
+  'Осторожно, лав... высота!','Пещеры зовут!','Сид решает всё!','Полный алмазный сет — победа!'];
 {
   const sp = document.getElementById('splash');
   if(sp) sp.textContent = SPLASHES[(Math.random()*SPLASHES.length)|0];
@@ -415,11 +418,27 @@ function hash2(x, z){
   h = Math.imul(h ^ (h>>>13), 1274126177);
   return ((h ^ (h>>>16)) >>> 0) / 4294967296;
 }
+function hash3(x,y,z){
+  let h = (Math.imul(x,374761393) + Math.imul(y,2246822519) + Math.imul(z,3266489917) + SEED)|0;
+  h = Math.imul(h ^ (h>>>13), 1274126177);
+  return ((h ^ (h>>>16)) >>> 0) / 4294967296;
+}
 const hash2s = (x,z,s)=> hash2(x + Math.imul(s,3163), z - Math.imul(s,9277));
 function vnoise(x,z){
   const xi=Math.floor(x), zi=Math.floor(z);
   const u=(x-xi)*(x-xi)*(3-2*(x-xi)), v=(z-zi)*(z-zi)*(3-2*(z-zi));
   return lerp(lerp(hash2(xi,zi),hash2(xi+1,zi),u), lerp(hash2(xi,zi+1),hash2(xi+1,zi+1),u), v);
+}
+function vnoise3(x,y,z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const u=(x-xi)*(x-xi)*(3-2*(x-xi));
+  const v=(y-yi)*(y-yi)*(3-2*(y-yi));
+  const w=(z-zi)*(z-zi)*(3-2*(z-zi));
+  return lerp(
+    lerp(lerp(hash3(xi,yi,zi),   hash3(xi+1,yi,zi),  u),
+         lerp(hash3(xi,yi+1,zi), hash3(xi+1,yi+1,zi),u), v),
+    lerp(lerp(hash3(xi,yi,zi+1),   hash3(xi+1,yi,zi+1),  u),
+         lerp(hash3(xi,yi+1,zi+1), hash3(xi+1,yi+1,zi+1),u), v), w);
 }
 function fbm(x,z,oct){
   let val=0, amp=0.5, f=1, norm=0;
@@ -449,59 +468,69 @@ function vibrate(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms); }catch(
 ============================================================ */
 const B = { AIR:0, GRASS:1, DIRT:2, STONE:3, SAND:4, LOG:5, LEAVES:6, WATER:7,
             PLANKS:8, COBBLE:9, GLASS:10, BRICK:11, SNOW:12, BEDROCK:13,
-            CRAFT:14, COAL_ORE:15, IRON_ORE:16, FURNACE:17 };
+            CRAFT:14, COAL_ORE:15, IRON_ORE:16, FURNACE:17, DIAMOND_ORE:18, CHEST:19 };
 const IT = { STICK:100,
-  WOOD_PICK:101, STONE_PICK:102, IRON_PICK:103,
-  WOOD_AXE:104,  STONE_AXE:105, IRON_AXE:106,
-  WOOD_SWORD:107, STONE_SWORD:108, IRON_SWORD:109,
-  COAL:110, RAW_IRON:111, IRON_INGOT:112,
-  RAW_PORK:113, COOKED_PORK:114, RAW_BEEF:115, STEAK:116,
-  RAW_CHICKEN:117, COOKED_CHICKEN:118 };
+  WOOD_PICK:101, STONE_PICK:102, IRON_PICK:103, DIAMOND_PICK:104,
+  WOOD_AXE:105,  STONE_AXE:106,  IRON_AXE:107,  DIAMOND_AXE:108,
+  WOOD_SWORD:109, STONE_SWORD:110, IRON_SWORD:111, DIAMOND_SWORD:112,
+  COAL:113, RAW_IRON:114, IRON_INGOT:115, DIAMOND:116,
+  RAW_PORK:117, COOKED_PORK:118, RAW_BEEF:119, STEAK:120,
+  RAW_CHICKEN:121, COOKED_CHICKEN:122,
+  BUCKET:123, BUCKET_WATER:124, APPLE:125 };
 
 const BLOCKS = {
-  [B.GRASS]:   {name:'Дёрн',         top:0,  side:1,  bot:2},
-  [B.DIRT]:    {name:'Земля',        top:2,  side:2,  bot:2},
-  [B.STONE]:   {name:'Камень',       top:3,  side:3,  bot:3},
-  [B.SAND]:    {name:'Песок',        top:4,  side:4,  bot:4},
-  [B.LOG]:     {name:'Бревно',       top:6,  side:5,  bot:6},
-  [B.LEAVES]:  {name:'Листва',       top:7,  side:7,  bot:7},
-  [B.WATER]:   {name:'Вода',         top:8,  side:8,  bot:8},
-  [B.PLANKS]:  {name:'Доски',        top:9,  side:9,  bot:9},
-  [B.COBBLE]:  {name:'Булыжник',     top:10, side:10, bot:10},
-  [B.GLASS]:   {name:'Стекло',       top:11, side:11, bot:11},
-  [B.BRICK]:   {name:'Кирпич',       top:12, side:12, bot:12},
-  [B.SNOW]:    {name:'Снег',         top:13, side:13, bot:13},
-  [B.BEDROCK]: {name:'Бедрок',       top:14, side:14, bot:14},
-  [B.CRAFT]:   {name:'Верстак',      top:15, side:15, bot:9},
-  [B.COAL_ORE]:{name:'Угольная руда',top:16, side:16, bot:16},
-  [B.IRON_ORE]:{name:'Железная руда',top:17, side:17, bot:17},
-  [B.FURNACE]: {name:'Печь',         top:10, side:18, bot:10},
+  [B.GRASS]:     {name:'Дёрн',           top:0,  side:1,  bot:2},
+  [B.DIRT]:      {name:'Земля',          top:2,  side:2,  bot:2},
+  [B.STONE]:     {name:'Камень',         top:3,  side:3,  bot:3},
+  [B.SAND]:      {name:'Песок',          top:4,  side:4,  bot:4},
+  [B.LOG]:       {name:'Бревно',         top:6,  side:5,  bot:6},
+  [B.LEAVES]:    {name:'Листва',         top:7,  side:7,  bot:7},
+  [B.WATER]:     {name:'Вода',           top:8,  side:8,  bot:8},
+  [B.PLANKS]:    {name:'Доски',          top:9,  side:9,  bot:9},
+  [B.COBBLE]:    {name:'Булыжник',       top:10, side:10, bot:10},
+  [B.GLASS]:     {name:'Стекло',         top:11, side:11, bot:11},
+  [B.BRICK]:     {name:'Кирпич',         top:12, side:12, bot:12},
+  [B.SNOW]:      {name:'Снег',           top:13, side:13, bot:13},
+  [B.BEDROCK]:   {name:'Бедрок',         top:14, side:14, bot:14},
+  [B.CRAFT]:     {name:'Верстак',        top:15, side:15, bot:9},
+  [B.COAL_ORE]:  {name:'Угольная руда',  top:16, side:16, bot:16},
+  [B.IRON_ORE]:  {name:'Железная руда',  top:17, side:17, bot:17},
+  [B.FURNACE]:   {name:'Печь',           top:10, side:18, bot:10},
+  [B.DIAMOND_ORE]:{name:'Алмазная руда', top:19, side:19, bot:19},
+  [B.CHEST]:     {name:'Сундук',         top:20, side:20, bot:20},
 };
 const ITEMS = {
   [IT.STICK]:        {name:'Палка'},
   [IT.WOOD_PICK]:    {name:'Деревянная кирка', tool:{type:'pick', mult:2.4, dmg:2, dur:60}},
   [IT.STONE_PICK]:   {name:'Каменная кирка',   tool:{type:'pick', mult:4.0, dmg:3, dur:132}},
   [IT.IRON_PICK]:    {name:'Железная кирка',   tool:{type:'pick', mult:6.0, dmg:3, dur:251}},
+  [IT.DIAMOND_PICK]: {name:'Алмазная кирка',   tool:{type:'pick', mult:8.0, dmg:4, dur:1024}},
   [IT.WOOD_AXE]:     {name:'Деревянный топор', tool:{type:'axe',  mult:2.4, dmg:3, dur:60}},
   [IT.STONE_AXE]:    {name:'Каменный топор',   tool:{type:'axe',  mult:4.0, dmg:4, dur:132}},
   [IT.IRON_AXE]:     {name:'Железный топор',   tool:{type:'axe',  mult:6.0, dmg:5, dur:251}},
+  [IT.DIAMOND_AXE]:  {name:'Алмазный топор',   tool:{type:'axe',  mult:8.0, dmg:6, dur:1024}},
   [IT.WOOD_SWORD]:   {name:'Деревянный меч',   tool:{type:'sword',mult:1.0, dmg:4, dur:60}},
   [IT.STONE_SWORD]:  {name:'Каменный меч',     tool:{type:'sword',mult:1.0, dmg:5, dur:132}},
   [IT.IRON_SWORD]:   {name:'Железный меч',     tool:{type:'sword',mult:1.0, dmg:6, dur:251}},
+  [IT.DIAMOND_SWORD]:{name:'Алмазный меч',     tool:{type:'sword',mult:1.0, dmg:7, dur:1024}},
   [IT.COAL]:         {name:'Уголь'},
   [IT.RAW_IRON]:     {name:'Железная руда (предмет)'},
   [IT.IRON_INGOT]:   {name:'Железный слиток'},
+  [IT.DIAMOND]:      {name:'Алмаз'},
   [IT.RAW_PORK]:     {name:'Сырая свинина',  food:3},
   [IT.COOKED_PORK]:  {name:'Жаркая свинина', food:8},
   [IT.RAW_BEEF]:     {name:'Сырая говядина', food:3},
   [IT.STEAK]:        {name:'Стейк',          food:8},
   [IT.RAW_CHICKEN]:  {name:'Сырая курица',   food:2},
   [IT.COOKED_CHICKEN]:{name:'Жареная курица',food:6},
+  [IT.BUCKET]:       {name:'Ведро'},
+  [IT.BUCKET_WATER]: {name:'Ведро воды'},
+  [IT.APPLE]:        {name:'Яблоко', food:4},
 };
 function nameOf(id){ return BLOCKS[id] ? BLOCKS[id].name : (ITEMS[id] ? ITEMS[id].name : '???'); }
 function isBlockItem(id){ return id>0 && id<100 && !!BLOCKS[id] && id!==B.WATER; }
 function isTool(id){ return !!(ITEMS[id] && ITEMS[id].tool); }
-function isStackable(id){ return !isTool(id); }
+function isStackable(id){ return !isTool(id) && id!==IT.BUCKET && id!==IT.BUCKET_WATER; }
 
 const OPAQUE = new Array(32).fill(true);
 OPAQUE[B.AIR]=OPAQUE[B.LEAVES]=OPAQUE[B.WATER]=OPAQUE[B.GLASS]=false;
@@ -510,39 +539,50 @@ SOLID[B.AIR]=SOLID[B.WATER]=false;
 const AOS = OPAQUE.slice(); AOS[B.LEAVES]=true;
 const HOTBAR = [B.GRASS,B.STONE,B.COBBLE,B.PLANKS,B.LOG,B.LEAVES,B.GLASS,B.SAND,B.BRICK];
 const PALETTE = [B.GRASS,B.DIRT,B.STONE,B.COBBLE,B.SAND,B.LOG,B.PLANKS,B.LEAVES,
-                 B.GLASS,B.BRICK,B.SNOW,B.CRAFT,B.FURNACE,B.COAL_ORE,B.IRON_ORE,B.BEDROCK,
-                 IT.WOOD_PICK,IT.STONE_PICK,IT.IRON_PICK,IT.WOOD_AXE,IT.IRON_AXE,
-                 IT.WOOD_SWORD,IT.STONE_SWORD,IT.IRON_SWORD,IT.COAL,IT.IRON_INGOT,
+                 B.GLASS,B.BRICK,B.SNOW,B.CRAFT,B.FURNACE,B.CHEST,B.COAL_ORE,B.IRON_ORE,B.DIAMOND_ORE,B.BEDROCK,
+                 IT.WOOD_PICK,IT.STONE_PICK,IT.IRON_PICK,IT.DIAMOND_PICK,
+                 IT.WOOD_AXE,IT.IRON_AXE,IT.DIAMOND_AXE,
+                 IT.WOOD_SWORD,IT.STONE_SWORD,IT.IRON_SWORD,IT.DIAMOND_SWORD,
+                 IT.COAL,IT.RAW_IRON,IT.IRON_INGOT,IT.DIAMOND,
+                 IT.BUCKET,IT.BUCKET_WATER,IT.APPLE,
                  IT.COOKED_PORK,IT.STEAK,IT.COOKED_CHICKEN];
 const NEIGH = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 const HARDNESS = {
   [B.GRASS]:0.65,[B.DIRT]:0.55,[B.SAND]:0.5,[B.LOG]:1.25,[B.PLANKS]:1.25,
   [B.LEAVES]:0.2,[B.STONE]:2.0,[B.COBBLE]:2.2,[B.BRICK]:2.2,[B.GLASS]:0.4,
-  [B.SNOW]:0.3,[B.CRAFT]:1.25,[B.COAL_ORE]:3.0,[B.IRON_ORE]:3.2,[B.FURNACE]:3.5,
-  [B.BEDROCK]:Infinity,[B.WATER]:Infinity
+  [B.SNOW]:0.3,[B.CRAFT]:1.25,[B.COAL_ORE]:3.0,[B.IRON_ORE]:3.2,[B.DIAMOND_ORE]:3.5,
+  [B.FURNACE]:3.5,[B.CHEST]:1.25,[B.BEDROCK]:Infinity,[B.WATER]:Infinity
 };
 const DROPS = { [B.GRASS]:B.DIRT, [B.STONE]:B.COBBLE,
-                [B.COAL_ORE]:IT.COAL, [B.IRON_ORE]:IT.RAW_IRON };
-const PICKS = new Set([B.STONE,B.COBBLE,B.BRICK,B.GLASS,B.COAL_ORE,B.IRON_ORE,B.FURNACE]);
-const AXES  = new Set([B.LOG,B.PLANKS,B.CRAFT]);
+                [B.COAL_ORE]:IT.COAL, [B.IRON_ORE]:IT.RAW_IRON, [B.DIAMOND_ORE]:IT.DIAMOND };
+const PICKS = new Set([B.STONE,B.COBBLE,B.BRICK,B.GLASS,B.COAL_ORE,B.IRON_ORE,B.DIAMOND_ORE,B.FURNACE]);
+const AXES  = new Set([B.LOG,B.PLANKS,B.CRAFT,B.CHEST]);
+const PICK_TIER = { [IT.WOOD_PICK]:1,[IT.STONE_PICK]:2,[IT.IRON_PICK]:3,[IT.DIAMOND_PICK]:4 };
+const ORE_TIER  = { [B.STONE]:1,[B.COBBLE]:1,[B.BRICK]:1,[B.FURNACE]:1,[B.COAL_ORE]:1,
+                    [B.IRON_ORE]:2,[B.DIAMOND_ORE]:3 };
 
-/* ---------- рецепты (без подсказок — только сопоставление) ---------- */
-const P=B.PLANKS, C=B.COBBLE, I=IT.IRON_INGOT, S=IT.STICK;
+/* ---------- рецепты ---------- */
+const P=B.PLANKS, C=B.COBBLE, I=IT.IRON_INGOT, D=IT.DIAMOND, S=IT.STICK;
 const RECIPES = [
   {out:B.PLANKS, n:4, any:[B.LOG]},
   {out:IT.STICK, n:4, pattern:[[P],[P]]},
   {out:B.CRAFT,  n:1, pattern:[[P,P],[P,P]]},
   {out:B.FURNACE,n:1, pattern:[[C,C,C],[C,0,C],[C,C,C]]},
+  {out:B.CHEST,  n:1, pattern:[[P,P,P],[P,0,P],[P,P,P]]},
   {out:B.BRICK,  n:1, pattern:[[C,C],[C,C]]},
+  {out:IT.BUCKET,n:1, pattern:[[I,0,I],[0,I,0]]},
   {out:IT.WOOD_PICK, n:1, pattern:[[P,P,P],[0,S,0],[0,S,0]]},
   {out:IT.STONE_PICK,n:1, pattern:[[C,C,C],[0,S,0],[0,S,0]]},
   {out:IT.IRON_PICK, n:1, pattern:[[I,I,I],[0,S,0],[0,S,0]]},
+  {out:IT.DIAMOND_PICK,n:1, pattern:[[D,D,D],[0,S,0],[0,S,0]]},
   {out:IT.WOOD_AXE,  n:1, pattern:[[P,P],[P,S],[0,S]]},
   {out:IT.STONE_AXE, n:1, pattern:[[C,C],[C,S],[0,S]]},
   {out:IT.IRON_AXE,  n:1, pattern:[[I,I],[I,S],[0,S]]},
+  {out:IT.DIAMOND_AXE,n:1, pattern:[[D,D],[D,S],[0,S]]},
   {out:IT.WOOD_SWORD, n:1, pattern:[[P],[P],[S]]},
   {out:IT.STONE_SWORD,n:1, pattern:[[C],[C],[S]]},
   {out:IT.IRON_SWORD, n:1, pattern:[[I],[I],[S]]},
+  {out:IT.DIAMOND_SWORD,n:1, pattern:[[D],[D],[S]]},
 ];
 
 /* ---------- плавка ---------- */
@@ -626,16 +666,24 @@ function buildAtlas(){
     if(x===5||x===10||y===5||y===10) return [P8(112+v*12),P8(82+v*10),P8(48+v*8)];
     return [P8(152+v*22),P8(116+v*18),P8(72+v*14)]; });
   setTile(16,(x,y,r)=>{ const v=r(); let g=P8(112+v*34-(r()<0.08?28:0));
-    if(hash2s(x>>1,y>>1,777)<0.22) g=P8(18+v*26);
+    if(hash3(x>>1,y>>1,x*7+y)<0.22) g=P8(18+v*26);
     return [g,g,g+2]; });
   setTile(17,(x,y,r)=>{ const v=r(); let g=P8(112+v*34-(r()<0.08?28:0));
-    if(hash2s(x>>1,y>>1,888)<0.22) return [P8(206+v*24),P8(158+v*20),P8(126+v*16)];
+    if(hash3(x>>1,y>>1,x*5+y*3)<0.22) return [P8(206+v*24),P8(158+v*20),P8(126+v*16)];
     return [g,g,g+2]; });
   setTile(18,(x,y,r)=>{ const v=r();
     if(x===0||x===15||y===0||y===15) return [P8(72+v*12),P8(72+v*12),P8(74+v*12)];
     if(y>=9&&y<=13&&x>=4&&x<=11) return [P8(20+v*12),P8(18+v*10),P8(16+v*10)];
     if(y===8&&x>=4&&x<=11) return [46,46,48];
     const g=P8(116+v*22); return [g,g,g+2]; });
+  setTile(19,(x,y,r)=>{ const v=r(); let g=P8(112+v*34-(r()<0.08?28:0));
+    if(hash3(x>>1,y>>1,x*3+y*11)<0.20) return [P8(70+v*30),P8(220+v*30),P8(216+v*30)];
+    return [g,g,g+2]; });
+  setTile(20,(x,y,r)=>{ const v=r();
+    if(x<1||x>14||y<1||y>14) return [P8(90+v*14),P8(66+v*10),P8(34+v*8)];
+    if(y===7||y===8) return [P8(104+v*12),P8(80+v*10),P8(44+v*8)];
+    if(x>=6&&x<=9&&y>=5&&y<=10) return [P8(160+v*20),P8(140+v*16),P8(90+v*12)];
+    return [P8(150+v*20),P8(112+v*16),P8(62+v*12)]; });
   actx2d.putImageData(aimg,0,0);
   if(atlasTex) atlasTex.needsUpdate = true;
   buildIcons();
@@ -686,7 +734,7 @@ function makeToolIcon(kind, light, dark){
       p(x,y,((x+y)%2)?light:dark);
     }
     p(7,2,dark); p(7,3,light);
-  } else { // sword
+  } else {
     for(let i=0;i<9;i++){ p(12-i,1+i,light); p(11-i,1+i,dark); }
     p(2,9,dark); p(3,10,dark); p(4,9,dark); p(4,11,dark);
     p(2,11,'#5a3d1c'); p(1,12,'#5a3d1c'); p(2,12,'#7d5a26');
@@ -714,22 +762,55 @@ function meatIcon(main, dark, bone){
   if(bone){ p(4,10,bone); p(3,11,bone); p(5,10,dark); p(4,11,'#c9c2ae'); p(2,12,'#c9c2ae'); p(3,12,'#c9c2ae'); }
   return c;
 }
+function bucketIcon(fill){
+  const [c,p]=pxCanvas();
+  p(4,2,'#9a9a9a'); p(5,1,'#9a9a9a'); p(6,1,'#b5b5b5'); p(7,1,'#b5b5b5');
+  p(8,1,'#b5b5b5'); p(9,1,'#b5b5b5'); p(10,1,'#9a9a9a'); p(11,2,'#9a9a9a');
+  const rows=[[5,10],[5,10],[4,11],[4,11],[3,12],[3,12],[3,12],[3,12]];
+  for(let i=0;i<rows.length;i++){
+    const y=4+i, [x0,x1]=rows[i];
+    for(let x=x0;x<=x1;x++){
+      let col = (x===x0||x===x1||y===11) ? '#9a9a9a' : '#6f6f6f';
+      if(fill && i<3 && x>x0 && x<x1) col = (x===x0+1&&y===4)?'#7fa8f0':'#3f6fd8';
+      p(x,y,col);
+    }
+  }
+  return c;
+}
+function appleIcon(){
+  const [c,p]=pxCanvas();
+  p(7,1,'#5a3d1c'); p(7,2,'#5a3d1c'); p(7,3,'#5a3d1c');
+  p(8,1,'#4f8f2f'); p(9,1,'#4f8f2f'); p(9,2,'#4f8f2f');
+  for(let y=3;y<=10;y++) for(let x=4;x<=11;x++){
+    if((x===4||x===11)&&(y===3||y===10)) continue;
+    if(x>=6&&x<=9&&y<=2) continue;
+    p(x,y,(x===5&&y===5)?'#ff9d9d':((x+y)%6?'#d23a3a':'#a82424'));
+  }
+  return c;
+}
 function buildItemIcons(){
-  const W=['#b3854a','#7d5a26'], St=['#a8a8a8','#6f6f6f'], Ir=['#d8d8d8','#9a9a9a'];
+  const W=['#b3854a','#7d5a26'], St=['#a8a8a8','#6f6f6f'], Ir=['#d8d8d8','#9a9a9a'], Dm=['#7ce8ea','#38b8bc'];
   const defs = [
     [IT.STICK, makeStickIcon()],
-    [IT.WOOD_PICK, makeToolIcon('pick',...W)], [IT.STONE_PICK, makeToolIcon('pick',...St)], [IT.IRON_PICK, makeToolIcon('pick',...Ir)],
-    [IT.WOOD_AXE, makeToolIcon('axe',...W)],   [IT.STONE_AXE, makeToolIcon('axe',...St)],   [IT.IRON_AXE, makeToolIcon('axe',...Ir)],
-    [IT.WOOD_SWORD, makeToolIcon('sword',...W)],[IT.STONE_SWORD, makeToolIcon('sword',...St)],[IT.IRON_SWORD, makeToolIcon('sword',...Ir)],
+    [IT.WOOD_PICK, makeToolIcon('pick',...W)], [IT.STONE_PICK, makeToolIcon('pick',...St)],
+    [IT.IRON_PICK, makeToolIcon('pick',...Ir)], [IT.DIAMOND_PICK, makeToolIcon('pick',...Dm)],
+    [IT.WOOD_AXE, makeToolIcon('axe',...W)],   [IT.STONE_AXE, makeToolIcon('axe',...St)],
+    [IT.IRON_AXE, makeToolIcon('axe',...Ir)],  [IT.DIAMOND_AXE, makeToolIcon('axe',...Dm)],
+    [IT.WOOD_SWORD, makeToolIcon('sword',...W)],[IT.STONE_SWORD, makeToolIcon('sword',...St)],
+    [IT.IRON_SWORD, makeToolIcon('sword',...Ir)],[IT.DIAMOND_SWORD, makeToolIcon('sword',...Dm)],
     [IT.COAL, lumpIcon('#26262a','#4a4a52')],
     [IT.RAW_IRON, lumpIcon('#c89878','#e8c4a4')],
     [IT.IRON_INGOT, ingotIcon('#e2e2e6','#9a9aa2')],
+    [IT.DIAMOND, lumpIcon('#3fd6d6','#aef4f4')],
     [IT.RAW_PORK, meatIcon('#e8938f','#c96b68','#c9c2ae')],
     [IT.COOKED_PORK, meatIcon('#b5773e','#8a5628','#c9c2ae')],
     [IT.RAW_BEEF, meatIcon('#c23a3a','#8f2424','#e8e2d6')],
     [IT.STEAK, meatIcon('#7a4a26','#573217','#c9c2ae')],
     [IT.RAW_CHICKEN, meatIcon('#ecc9b8','#d0a68f','#c9c2ae')],
     [IT.COOKED_CHICKEN, meatIcon('#c98a4a','#9c6430','#c9c2ae')],
+    [IT.BUCKET, bucketIcon(false)],
+    [IT.BUCKET_WATER, bucketIcon(true)],
+    [IT.APPLE, appleIcon()],
   ];
   for(const [id, cnv] of defs){ ICON[id]=cnv.toDataURL(); ICONC[id]=cnv; }
 }
@@ -768,7 +849,6 @@ const opaqueMat = new THREE.MeshBasicMaterial({map:atlasTex, vertexColors:true, 
 const waterMat  = new THREE.MeshBasicMaterial({map:atlasTex, vertexColors:true, transparent:true,
                                                opacity:0.72, side:THREE.DoubleSide, depthWrite:false});
 
-// свет — для животных (блоки рендерятся без освещения)
 const amb = new THREE.AmbientLight(0xffffff, 0.85); scene.add(amb);
 const sunLight = new THREE.DirectionalLight(0xffffff, 0.5); scene.add(sunLight); scene.add(sunLight.target);
 
@@ -795,7 +875,7 @@ const crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.002,1.002,1.002), crack
 crackMesh.visible=false; scene.add(crackMesh);
 
 /* ============================================================
-   МИР: ГЕНЕРАЦИЯ (пещеры + руды)
+   МИР: ГЕНЕРАЦИЯ (3D-пещеры + редкие жилы руд)
 ============================================================ */
 const chunks = new Map();
 const ckey = (cx,cz)=> cx*65536 + cz;
@@ -807,12 +887,15 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-/* пещеры-«спагетти»: пересечение двух шумовых туннелей */
+/* настоящие пещеры: туннели-спагетти + глубокие залы */
 function isCave(x,y,z){
-  if(y<3 || y>52) return false;
-  const a = fbm(x*0.045, z*0.045 + y*0.23, 2) - 0.5;
-  const b = fbm(x*0.045 - 3000, y*0.23 + z*0.045 + 3000, 2) - 0.5;
-  return Math.abs(a)<0.07 && Math.abs(b)<0.07;
+  const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
+  if(Math.abs(a) < 0.045){
+    const b2 = vnoise3(x*0.021+520.7, y*0.045+520.7, z*0.021-311.3) - 0.5;
+    if(Math.abs(b2) < 0.045) return true;
+  }
+  if(y < 30 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.78) return true;
+  return false;
 }
 function setInChunk(data,cx,cz,wx,wy,wz,b,soft){
   if(wy<0||wy>=CY) return;
@@ -840,20 +923,22 @@ function genChunk(cx,cz){
   for(let x=0;x<16;x++) for(let z=0;z<16;z++){
     const wx=cx*16+x, wz=cz*16+z;
     const h = terrainHeight(wx,wz);
-    const canCarve = h>SEA+1;
+    const canCarve = h > SEA+1;
     for(let y=0;y<=h;y++){
       let b;
       if(y===0) b=B.BEDROCK;
       else if(y<h-3) b=B.STONE;
       else if(y<h) b = h<=SEA+1 ? B.SAND : (h>=46 ? B.STONE : B.DIRT);
       else b = h<=SEA+1 ? B.SAND : h>=50 ? B.SNOW : h>=46 ? B.STONE : B.GRASS;
-      if(b!==B.BEDROCK && canCarve && y>2 && isCave(wx,y,wz)){
+      if(b!==B.BEDROCK && canCarve && y>=3 && isCave(wx,y,wz)){
         data[(y*16+z)*16+x]=B.AIR;
         continue;
       }
       if(b===B.STONE){
-        if(vnoise(wx*0.35 + y*0.5, wz*0.35 - y*0.3) > 0.80) b=B.COAL_ORE;
-        else if(y<30 && vnoise(wx*0.3 - 5000 + y*0.55, wz*0.3 + y*0.4 - 5000) > 0.82) b=B.IRON_ORE;
+        // кластерные жилы через 3D-шум: уголь повсюду, железо глубоко и редко, алмазы — совсем глубоко
+        if(y<52 && vnoise3(wx*0.30, y*0.30, wz*0.30) > 0.80) b=B.COAL_ORE;
+        else if(y<26 && vnoise3(wx*0.31+1000, y*0.31+1000, wz*0.31+1000) > 0.835) b=B.IRON_ORE;
+        else if(y<14 && vnoise3(wx*0.32-1000, y*0.32-1000, wz*0.32-1000) > 0.86) b=B.DIAMOND_ORE;
       }
       data[(y*16+z)*16+x]=b;
     }
@@ -862,7 +947,10 @@ function genChunk(cx,cz){
   for(let dx=-3;dx<19;dx++) for(let dz=-3;dz<19;dz++){
     const wx=cx*16+dx, wz=cz*16+dz;
     const h = terrainHeight(wx,wz);
-    if(h>SEA+1 && h<46 && hash2s(wx,wz,11)<0.0085) placeTree(data,cx,cz,wx,h,wz);
+    if(h<=SEA+1 || h>=46) continue;
+    // не сажать дерево там, где пещера съела поверхность
+    if(dx>=0&&dx<16&&dz>=0&&dz<16 && data[(h*16+dz)*16+dx]===B.AIR) continue;
+    if(hash2s(wx,wz,11)<0.0085) placeTree(data,cx,cz,wx,h,wz);
   }
   let maxY=0;
   for(let y=CY-1;y>=0;y--){ let any=false;
@@ -883,6 +971,15 @@ function getBlock(wx,wy,wz){
   const c = chunks.get(ckey(wx>>4, wz>>4));
   if(!c) return B.AIR;
   return c.data[(wy*16+(wz&15))*16+(wx&15)];
+}
+/* пол под ногами: сканируем ВНИЗ от указанной высоты (кроны деревьев не мешают) */
+function floorYAt(x,y,z){
+  const ix=Math.floor(x), iz=Math.floor(z);
+  let iy=Math.min(CY-1, Math.floor(y));
+  for(; iy>=0; iy--){
+    if(SOLID[getBlock(ix,iy,iz)]) return iy+1;
+  }
+  return 1;
 }
 function surfaceYAt(wx,wz){
   for(let y=CY-1;y>0;y--){
@@ -1199,10 +1296,10 @@ function sfx(type){
     else if(type==='hurt') tone('sawtooth',220,70,0.24,0.32);
     else if(type==='hit') noise(0.08, 1400, 0.3, 1.6);
     else if(type==='eat'){ noise(0.07, 900, 0.28, 0.9); setTimeout(()=>{ try{ noise(0.07, 700, 0.24, 0.8); }catch(e){} },120); }
+    else if(type==='splash') noise(0.2, 1200, 0.2, 0.7);
     else if(type==='oink') tone('square',300,190,0.12,0.12);
     else if(type==='moo') tone('sawtooth',165,90,0.4,0.14);
     else if(type==='cluck') tone('square',740,520,0.08,0.1);
-    else if(type==='fizz') noise(0.3, 1600, 0.06, 0.5);
   }catch(e){}
 }
 
@@ -1383,7 +1480,6 @@ function addHunger(v){
 }
 function updateSurvival(dt,t){
   if(game.mode!=='survival' || dead) return;
-  // воздух
   const headWater = isWaterAt(camera.position.x, camera.position.y, camera.position.z);
   if(headWater){
     player.air -= dt;
@@ -1393,11 +1489,9 @@ function updateSurvival(dt,t){
     }
   } else { player.air=Math.min(10, player.air+dt*3); player.drownT=0; }
   renderAir();
-  // голод: расход зависит от активности
   const sprint = key('ShiftLeft')||key('ShiftRight');
   const drain = sprint&&lastHSpeed>4.5 ? 0.09 : lastHSpeed>0.5 ? 0.028 : 0.010;
   addHunger(-drain*dt);
-  // регенерация при сытости
   if(player.hunger>=18 && player.health<20 && t-player.lastDamageT>5){
     player.regenAcc+=dt;
     if(player.regenAcc>=2.5){
@@ -1407,7 +1501,6 @@ function updateSurvival(dt,t){
       renderHealth();
     }
   }
-  // голодная смерть до полусердца
   if(player.hunger<=0){
     player.starveT+=dt;
     if(player.starveT>=4){
@@ -1428,10 +1521,10 @@ function updateVoid(dt){
 }
 
 /* ============================================================
-   ПРИЦЕЛ, ДОБЫЧА, УСТАНОВКА
+   ПРИЦЕЛ, ДОБЫЧА (с уровнями кирки), ВЕДРО
 ============================================================ */
 const _dir=new THREE.Vector3();
-function raycastBlock(maxDist=6){
+function ddaRay(maxDist, wantWater){
   const o=camera.position, d=camera.getWorldDirection(_dir);
   let x=Math.floor(o.x), y=Math.floor(o.y), z=Math.floor(o.z);
   const sx=d.x>=0?1:-1, sy=d.y>=0?1:-1, sz=d.z>=0?1:-1;
@@ -1443,24 +1536,45 @@ function raycastBlock(maxDist=6){
   let fx=0,fy=0,fz=0;
   for(let i=0;i<80;i++){
     const b=getBlock(x,y,z);
-    if(b!==B.AIR && b!==B.WATER) return {x,y,z,b,fx,fy,fz};
+    if(wantWater){
+      if(b===B.WATER) return {x,y,z,b,fx,fy,fz};
+      if(b!==B.AIR) return null;          // твёрдый блок закрывает воду
+    } else {
+      if(b!==B.AIR && b!==B.WATER) return {x,y,z,b,fx,fy,fz};
+    }
     if(tmx<tmy && tmx<tmz){ if(tmx>maxDist)break; x+=sx; tmx+=tdx; fx=-sx;fy=0;fz=0; }
     else if(tmy<tmz)       { if(tmy>maxDist)break; y+=sy; tmy+=tdy; fx=0;fy=-sy;fz=0; }
     else                   { if(tmz>maxDist)break; z+=sz; tmz+=tdz; fx=0;fy=0;fz=-sz; }
   }
   return null;
 }
+function raycastBlock(maxDist=6){ return ddaRay(maxDist,false); }
+function raycastFluid(maxDist=4.6){ return ddaRay(maxDist,true); }
+
 function reachNow(){ return game.mode==='survival' ? 4.6 : 6; }
 function boxIntersectsPlayer(bx,by,bz){
   const p=player.pos;
   return bx<p.x+0.3 && bx+1>p.x-0.3 && by<p.y+1.8 && by+1>p.y && bz<p.z+0.3 && bz+1>p.z-0.3;
+}
+function pickTierOf(){
+  const it=inv[slot];
+  if(it && isTool(it.id)){
+    const tl=ITEMS[it.id].tool;
+    if(tl.type==='pick') return PICK_TIER[it.id]||0;
+  }
+  return 0;
+}
+function canHarvest(b){
+  const need=ORE_TIER[b]||0;
+  return need===0 || pickTierOf()>=need;
 }
 function miningTime(b){
   let t=HARDNESS[b];
   const it=inv[slot];
   if(it && isTool(it.id)){
     const tl=ITEMS[it.id].tool;
-    if((tl.type==='pick'&&PICKS.has(b))||(tl.type==='axe'&&AXES.has(b))) t/=tl.mult;
+    if(tl.type==='pick' && PICKS.has(b) && (ORE_TIER[b]||0)<=(PICK_TIER[it.id]||0)) t/=tl.mult;
+    else if(tl.type==='axe' && AXES.has(b)) t/=tl.mult;
   }
   return t;
 }
@@ -1469,13 +1583,22 @@ function attackDmg(){
   if(it && isTool(it.id)) return ITEMS[it.id].tool.dmg;
   return 1;
 }
+const posKey = (x,y,z)=> x+','+y+','+z;
 function breakBlock(x,y,z,b){
   if(b===B.FURNACE){
-    const fk=furnKey(x,y,z);
-    const f=furnaces.get(fk);
+    const f=furnaces.get(posKey(x,y,z));
     if(f){
       for(const s of [f.inp,f.fuel,f.out]) if(s) spawnDrop(s.id,s.count, x+0.5,y+0.5,z+0.5);
-      furnaces.delete(fk);
+      furnaces.delete(posKey(x,y,z));
+      if(uiMode==='furnace' && furnKeyCur===posKey(x,y,z)) closeInventory(true);
+    }
+  }
+  if(b===B.CHEST){
+    const arr=chests.get(posKey(x,y,z));
+    if(arr){
+      for(const s of arr) if(s) spawnDrop(s.id,s.count===Infinity?1:s.count, x+0.5,y+0.5,z+0.5);
+      chests.delete(posKey(x,y,z));
+      if(uiMode==='chest' && chestKeyCur===posKey(x,y,z)) closeInventory(true);
     }
   }
   let nb=B.AIR;
@@ -1486,13 +1609,29 @@ function breakBlock(x,y,z,b){
   sfx('break');
   vibrate(25);
   if(game.mode==='survival'){
-    if(addItem(DROPS[b]!==undefined ? DROPS[b] : b, 1)) sfx('pop');
+    let dropId;
+    if(b===B.LEAVES) dropId = Math.random()<0.08 ? IT.APPLE : -1;   // яблоки из листвы
+    else if(b===B.GLASS) dropId = -1;                                // стекло разбивается
+    else if(!canHarvest(b)) dropId = -1;                             // без нужной кирки — нет дропа
+    else dropId = DROPS[b]!==undefined ? DROPS[b] : b;
+    if(dropId>=0 && addItem(dropId,1)) sfx('pop');
+    if(b===B.DIAMOND_ORE && canHarvest(b)) showToast('★ Алмаз! Осталась алмазная кирка...');
     const held=inv[slot];
     if(held && isTool(held.id)){
       held.dur--;
       if(held.dur<=0){ inv[slot]=null; showToast(nameOf(held.id)+' сломался!'); sfx('break'); }
       renderHotbar();
     }
+  }
+}
+let winShown=false;
+function checkWin(){
+  if(winShown) return;
+  const has=id=>inv.some(it=>it&&it.id===id);
+  if(has(IT.DIAMOND_PICK)&&has(IT.DIAMOND_SWORD)&&has(IT.DIAMOND_AXE)){
+    winShown=true;
+    showToast('★ ТЫ ПРОШЁЛ MINECRAFT — полный алмазный сет! ★');
+    sfx('pop');
   }
 }
 function addItem(id, count=1, dur){
@@ -1502,56 +1641,68 @@ function addItem(id, count=1, dur){
       const move=Math.min(count===Infinity?64:count, 64-it.count);
       it.count+=move; if(count!==Infinity) count-=move;
       if(count===Infinity) count=0;
-      if(count<=0){ renderHotbar(); if(invOpen) renderInvUI(); return true; }
+      if(count<=0){ renderHotbar(); if(invOpen) renderInvUI(); checkWin(); return true; }
     }
   }
   for(let i=0;i<36;i++){
     if(!inv[i]){
       inv[i] = {id, count, ...(dur!=null?{dur}:{})};
       renderHotbar(); if(invOpen) renderInvUI();
+      checkWin();
       return true;
     }
   }
   showToast('Инвентарь полон!');
   return false;
 }
-function eatFood(){
-  const it=inv[slot];
-  if(!it || !ITEMS[it.id] || !ITEMS[it.id].food) return false;
-  if(game.mode!=='survival'){ showToast('Еда не нужна в творческом'); return true; }
-  if(player.hunger>19.5){ showToast('Ты не голоден'); return true; }
-  addHunger(ITEMS[it.id].food);
-  it.count--;
-  if(it.count<=0) inv[slot]=null;
-  renderHotbar();
-  sfx('eat'); vibrate(30);
-  showToast('Ням! +' + ITEMS[it.id===IT.RAW_PORK?IT.RAW_PORK:slot>=0?0:0,0]); // placeholder, заменяется ниже
-  return true;
-}
 function doPlace(force=false){
-  const it=inv[slot];
-  if(it && ITEMS[it.id] && ITEMS[it.id].food){
-    // еда
+  const held=inv[slot];
+  // еда
+  if(held && ITEMS[held.id] && ITEMS[held.id].food){
     if(game.mode!=='survival'){ showToast('Еда не нужна в творческом'); return; }
     if(player.hunger>19.5){ showToast('Ты не голоден'); return; }
-    addHunger(ITEMS[it.id].food);
-    showToast('Ням! +' + ITEMS[it.id].food + ' сытости');
-    it.count--;
-    if(it.count<=0) inv[slot]=null;
+    addHunger(ITEMS[held.id].food);
+    showToast('Ням! +'+ITEMS[held.id].food+' сытости');
+    held.count--;
+    if(held.count<=0) inv[slot]=null;
     renderHotbar();
     sfx('eat'); vibrate(30);
+    return;
+  }
+  // ведро воды — вылить
+  if(held && held.id===IT.BUCKET_WATER){
+    const hit=raycastBlock(reachNow());
+    if(hit){
+      const nx=hit.x+hit.fx, ny=hit.y+hit.fy, nz=hit.z+hit.fz;
+      if(getBlock(nx,ny,nz)===B.AIR){
+        setBlockWorld(nx,ny,nz,B.WATER);
+        sfx('splash');
+        if(game.mode==='survival'){ inv[slot]={id:IT.BUCKET,count:1}; renderHotbar(); }
+      }
+    }
+    return;
+  }
+  // пустое ведро — набрать
+  if(held && held.id===IT.BUCKET){
+    const w=raycastFluid(reachNow());
+    if(w){
+      setBlockWorld(w.x,w.y,w.z,B.AIR);
+      sfx('splash');
+      if(game.mode==='survival'){ inv[slot]={id:IT.BUCKET_WATER,count:1}; renderHotbar(); }
+      showToast('Вода набрана');
+    } else showToast('Наведись на воду поближе');
     return;
   }
   const hit=raycastBlock(reachNow());
   if(!hit) return;
   if(hit.b===B.CRAFT && !force){ openInventory(3); return; }
-  if(hit.b===B.FURNACE && !force){ openFurnace(furnKey(hit.x,hit.y,hit.z)); return; }
+  if(hit.b===B.FURNACE && !force){ openFurnace(posKey(hit.x,hit.y,hit.z)); return; }
+  if(hit.b===B.CHEST && !force){ openChest(posKey(hit.x,hit.y,hit.z)); return; }
   const nx=hit.x+hit.fx, ny=hit.y+hit.fy, nz=hit.z+hit.fz;
   if(ny<1||ny>=CY) return;
   const cur=getBlock(nx,ny,nz);
   if(cur!==B.AIR && cur!==B.WATER) return;
   if(boxIntersectsPlayer(nx,ny,nz)) return;
-  const held=inv[slot];
   if(!held){ showToast('Пусто — добудь блоки'); return; }
   if(!isBlockItem(held.id)){ showToast(nameOf(held.id)+' нельзя поставить'); return; }
   setBlockWorld(nx,ny,nz,held.id);
@@ -1758,7 +1909,13 @@ const lookEnd=e=>{
     if(playing&&!dead&&!invOpen&&!touchLook.moved&&!touchLook.mining&&dur<250){
       const m=pickMob();
       if(m) tryAttack(m, performance.now()/1000);
-      else doPlace();
+      else {
+        const hit=raycastBlock(reachNow());
+        if(hit && hit.b===B.CRAFT) openInventory(3);
+        else if(hit && hit.b===B.FURNACE) openFurnace(posKey(hit.x,hit.y,hit.z));
+        else if(hit && hit.b===B.CHEST) openChest(posKey(hit.x,hit.y,hit.z));
+        else doPlace();
+      }
     }
     touchLook.id=null; touchLook.mining=false;
   }
@@ -1819,13 +1976,13 @@ function mobileBoost(){
 }
 
 /* ============================================================
-   ЖИВОТНЫЕ
+   ЖИВОТНЫЕ (исправленный ИИ: пол под ногами, шаг, без телепортов)
 ============================================================ */
 const mobRoot = new THREE.Group(); scene.add(mobRoot);
 const mobs = [];
 const RED = new THREE.Color(1, 0.2, 0.15);
-const MOB_CAP = IS_TOUCH ? 7 : 12;
-let mobSpawnT = 2;
+const MOB_CAP = IS_TOUCH ? 8 : 12;
+let mobSpawnT = 1;
 
 function part(group, w,h,d, color, x,y,z, ty){
   const geo=new THREE.BoxGeometry(w,h,d);
@@ -1870,7 +2027,7 @@ function makeMob(type,x,y,z){
   }
   g.position.set(x,y,z);
   const mob={type,group:g,legs,hp,maxHp:hp,yaw:Math.random()*6.28,t:0,walk:false,
-             vy:0,kx:0,kz:0,flash:0,dying:0,voice,inWater:false,v:0};
+             vy:0,kx:0,kz:0,flash:0,dying:0,voice,inWater:false,v:0,age:0};
   g.traverse(o=>{ o.userData.mob=mob; });
   mobRoot.add(g);
   mobs.push(mob);
@@ -1917,10 +2074,9 @@ function pickMob(){
   return null;
 }
 function updateMobs(dt,t){
-  // спавн
   mobSpawnT-=dt;
   if(mobSpawnT<=0){
-    mobSpawnT=1.6;
+    mobSpawnT=1.4;
     if(mobs.length<MOB_CAP) trySpawnMob();
   }
   for(let i=mobs.length-1;i>=0;i--){
@@ -1934,7 +2090,11 @@ function updateMobs(dt,t){
       continue;
     }
     const distP=Math.hypot(g.position.x-player.pos.x, g.position.z-player.pos.z);
-    if(distP>70 || g.position.y<-10){ removeMob(i); continue; }
+    m.age+=dt;
+    if((m.age>25 && distP>44) || g.position.y<-10){ removeMob(i); continue; }
+    // в незагруженном чанке моб замирает (раньше здесь он проваливался/телепортировался)
+    if(!chunks.has(ckey(Math.floor(g.position.x)>>4, Math.floor(g.position.z)>>4))) continue;
+
     // ИИ: блуждание
     m.t-=dt;
     if(m.t<=0){
@@ -1946,30 +2106,34 @@ function updateMobs(dt,t){
     let vz = m.walk?Math.cos(m.yaw)*m.speed:0;
     vx+=m.kx; vz+=m.kz;
     m.kx*=Math.exp(-5*dt); m.kz*=Math.exp(-5*dt);
+
+    // горизонтальное движение с шагом на 1 блок и коллизией по корпусу
     const nx=g.position.x+vx*dt, nz=g.position.z+vz*dt;
-    if(chunks.has(ckey(Math.floor(nx)>>4, Math.floor(nz)>>4))){
-      const headBlock=getBlock(Math.floor(nx),Math.floor(g.position.y+0.4),Math.floor(nz));
-      m.inWater = getBlock(Math.floor(nx),Math.floor(g.position.y+0.1),Math.floor(nz))===B.WATER;
-      const gy=surfaceYAt(Math.floor(nx),Math.floor(nz));
-      const blocked = SOLID[headBlock] || (gy-g.position.y>1.05);
-      if(!blocked){
+    if(vx||vz){
+      const fx=Math.floor(nx), fz=Math.floor(nz);
+      const b1=getBlock(fx, Math.floor(g.position.y+1.1), fz);
+      const b2=getBlock(fx, Math.floor(g.position.y+1.9), fz);
+      const fl=floorYAt(nx, g.position.y+1.15, nz);
+      if(!SOLID[b1] && !SOLID[b2] && (fl-g.position.y)<=1.05){
         g.position.x=nx; g.position.z=nz;
-        if(gy>g.position.y && gy-g.position.y<=1.05 && m.vy<=0) g.position.y=gy;
+        if(fl>g.position.y) g.position.y=fl;
       } else { m.yaw=Math.random()*Math.PI*2; m.t=0.5; }
     }
-    // гравитация / плавание
+
+    // гравитация с честным полом (кроны больше не притягивают)
+    m.inWater = getBlock(Math.floor(g.position.x),Math.floor(g.position.y+0.2),Math.floor(g.position.z))===B.WATER;
     m.vy-=24*dt;
-    if(m.inWater) m.vy=clamp(m.vy+8*dt, -1.2, 1.6);
+    if(m.inWater) m.vy=clamp(m.vy+10*dt, -1.5, 1.8);
     if(m.type==='chicken') m.vy=Math.max(m.vy,-3);
     g.position.y+=m.vy*dt;
-    const gy2=surfaceYAt(Math.floor(g.position.x),Math.floor(g.position.z));
-    if(g.position.y<=gy2){ g.position.y=gy2; m.vy=0; }
+    const fl2=floorYAt(g.position.x, g.position.y+0.4, g.position.z);
+    if(g.position.y<=fl2){ g.position.y=fl2; m.vy=0; }
+
     // анимация
     g.rotation.y=m.yaw;
     m.v += m.walk?dt*9:0;
     for(let li=0;li<m.legs.length;li++)
       m.legs[li].rotation.x=Math.sin(m.v+(li%2?Math.PI:0))*0.55*(m.walk?1:0);
-    // урон-вспышка
     if(m.flash>0){
       m.flash-=dt;
       const f=Math.max(0,m.flash)/0.15;
@@ -1980,7 +2144,7 @@ function updateMobs(dt,t){
   }
 }
 function trySpawnMob(){
-  const a=Math.random()*Math.PI*2, d=12+Math.random()*18;
+  const a=Math.random()*Math.PI*2, d=10+Math.random()*14;   // ближе, чтобы животные были видны
   const x=Math.floor(player.pos.x+Math.cos(a)*d), z=Math.floor(player.pos.z+Math.sin(a)*d);
   if(!chunks.has(ckey(x>>4,z>>4))) return;
   const sy=surfaceYAt(x,z);
@@ -1991,7 +2155,7 @@ function trySpawnMob(){
   makeMob(r<0.34?'pig':r<0.67?'cow':'chicken', x+0.5, sy, z+0.5);
 }
 
-/* ---------- выпавшие предметы ---------- */
+/* ---------- выпавшие предметы (пол тоже по-новому) ---------- */
 const drops=[];
 const dropMats={};
 function dropMat(id){
@@ -2014,9 +2178,9 @@ function updateDrops(dt,t){
   for(let i=drops.length-1;i>=0;i--){
     const d=drops[i];
     d.age+=dt; d.cool-=dt;
-    const g=surfaceYAt(Math.floor(d.x),Math.floor(d.z));
     d.vy-=18*dt; d.y+=d.vy*dt;
-    if(d.y<g+0.15){ d.y=g+0.15; d.vy=0; }
+    const fl=floorYAt(d.x, d.y+0.3, d.z);
+    if(d.y<fl+0.15){ d.y=fl+0.15; d.vy=0; }
     const dx=player.pos.x-d.x, dy=(player.pos.y+0.9)-d.y, dz=player.pos.z-d.z;
     const dist=Math.hypot(dx,dy,dz);
     if(dist>0.01 && dist<1.9){
@@ -2033,11 +2197,11 @@ function updateDrops(dt,t){
 }
 
 /* ============================================================
-   ПЕЧЬ
+   ПЕЧЬ И СУНДУК
 ============================================================ */
 const furnaces = new Map();
-const furnKey = (x,y,z)=> x+','+y+','+z;
-let furnCur=null, furnKeyCur=null;
+const chests = new Map();
+let furnCur=null, furnKeyCur=null, chestCur=null, chestKeyCur=null;
 function tickFurnaces(dt){
   for(const f of furnaces.values()){
     const rec = f.inp ? SMELT[f.inp.id] : null;
@@ -2086,6 +2250,8 @@ const craftGridEl=document.getElementById('craftGrid');
 const craftOutEl=document.getElementById('craftOut');
 const craftAreaEl=document.getElementById('craftArea');
 const furnAreaEl=document.getElementById('furnArea');
+const chestAreaEl=document.getElementById('chestArea');
+const chestGridEl=document.getElementById('chestGrid');
 const flameFillEl=document.getElementById('flameFill');
 const arrowFillEl=document.getElementById('arrowFill');
 const creativePalEl=document.getElementById('creativePal');
@@ -2181,7 +2347,6 @@ function fillGrid(container, arr, idxs, creativeHotbar){
   }
 }
 
-/* ---------- сопоставление рецептов ---------- */
 function patEq(rows,pat){
   if(pat.length!==rows.length) return false;
   for(let i=0;i<pat.length;i++){
@@ -2248,16 +2413,18 @@ function takeCraftResult(){
   updateCraftResult(); renderInvUI(); sfx('pop');
 }
 function renderInvUI(){
-  const creative = uiMode!=='furnace' && game.mode==='creative';
+  const creative = uiMode!=='furnace' && uiMode!=='chest' && game.mode==='creative';
   invTitleEl.textContent =
     uiMode==='furnace' ? 'Печь' :
+    uiMode==='chest' ? 'Сундук' :
     creative ? 'Творческий режим' :
     (craftSize===3?'Верстак':'Инвентарь');
-  craftAreaEl.style.display   = (!creative && uiMode!=='furnace') ? 'flex' : 'none';
+  craftAreaEl.style.display   = (!creative && uiMode!=='furnace' && uiMode!=='chest') ? 'flex' : 'none';
   furnAreaEl.style.display    = uiMode==='furnace' ? 'flex' : 'none';
+  chestAreaEl.style.display   = uiMode==='chest' ? 'block' : 'none';
   invStorageEl.style.display  = creative ? 'none' : 'grid';
   creativePalEl.style.display = creative ? 'grid' : 'none';
-  if(!creative && uiMode!=='furnace'){
+  if(!creative && uiMode!=='furnace' && uiMode!=='chest'){
     fillGrid(invStorageEl, inv, Array.from({length:27},(_,k)=>k+9), false);
     craftGridEl.innerHTML='';
     craftGridEl.style.gridTemplateColumns = `repeat(${craftSize}, var(--sl))`;
@@ -2282,6 +2449,9 @@ function renderInvUI(){
     craftOutEl.append(so.el);
   } else if(uiMode==='furnace'){
     fillGrid(invStorageEl, inv, Array.from({length:27},(_,k)=>k+9), false);
+  } else if(uiMode==='chest'){
+    fillGrid(invStorageEl, inv, Array.from({length:27},(_,k)=>k+9), false);
+    fillGrid(chestGridEl, chestCur, Array.from({length:27},(_,k)=>k), false);
   } else {
     buildCreativePal();
   }
@@ -2336,10 +2506,21 @@ function openFurnace(key){
   if(document.pointerLockElement) document.exitPointerLock();
   refreshScreens(); renderInvUI();
 }
+function openChest(key){
+  if(dead) return;
+  let arr=chests.get(key);
+  if(!arr){ arr=new Array(27).fill(null); chests.set(key,arr); }
+  chestCur=arr; chestKeyCur=key;
+  uiMode='chest';
+  invOpen=true; cursor=null;
+  resetUIInputs();
+  if(document.pointerLockElement) document.exitPointerLock();
+  refreshScreens(); renderInvUI();
+}
 function closeInventory(relock=true){
   returnGridToInv();
   if(cursor){ addItem(cursor.id, cursor.count, cursor.dur); cursor=null; }
-  invOpen=false; furnCur=null; furnKeyCur=null;
+  invOpen=false; furnCur=null; furnKeyCur=null; chestCur=null; chestKeyCur=null;
   refreshScreens();
   if(relock && screenState==='game') lockPointer();
 }
@@ -2416,7 +2597,7 @@ function renderFurnaceUI(){
 }
 
 /* ============================================================
-   UI: хотбар, сердца, голод, воздух, тосты
+   UI: хотбар, сердца, голод, воздух
 ============================================================ */
 const hotbarEl=document.getElementById('hotbar');
 const itemNameEl=document.getElementById('itemName');
@@ -2683,6 +2864,7 @@ function resetWorld(seed){
   chunks.clear();
   meshQueue.length=0; lastPcx=1e9; lastPcz=1e9;
   furnaces.clear(); furnCur=null; furnKeyCur=null;
+  chests.clear(); chestCur=null; chestKeyCur=null;
   while(mobs.length) removeMob(0);
   for(const d of drops) scene.remove(d.sp);
   drops.length=0;
@@ -2701,11 +2883,11 @@ function resetWorld(seed){
   }
   slot=0;
   worldT=0.3;
+  winShown=false;
   worldLabelEl.textContent = game.worldName+'\n'+MODE_NAMES[game.mode];
   renderHotbar(); renderHealth(); renderHunger(); renderAir(); renderCursor();
   updateTouchUI();
   scanChunks(true);
-  // немного животных сразу возле спавна
   for(let k=0;k<6;k++) trySpawnMob();
 }
 
@@ -2761,7 +2943,6 @@ function updateSky(dt){
   opaqueMat.color.copy(lightC);
   waterMat.color.copy(lightC);
   cloudMat.color.setScalar(0.35+0.65*daylight);
-  // свет для животных
   amb.intensity = 0.4+0.5*daylight;
   sunLight.intensity = 0.1+0.55*daylight;
   sunLight.position.set(
