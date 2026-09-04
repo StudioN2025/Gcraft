@@ -1115,7 +1115,7 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-/* пещеры: туннели минимум на 6 блоков под поверхностью, редкие входы; залы — глубже 26 */
+/* пещеры: туннели минимум на 6 блоков под поверхностью, редкие выходы; залы — глубже 26 */
 function isCave(x,y,z,h){
   if(y<4 || y>46) return false;
   const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
@@ -1378,7 +1378,7 @@ function buildChunk(c){
       const F=FACES[f];
       const nb=at(wx+F.dir[0], y+F.dir[1], wz+F.dir[2]);
       let show;
-      if(b===B.LEAVES)      show = !OPAQUE[nb];           // листва — все грани
+      if(b===B.LEAVES)      show = !OPAQUE[nb];
       else if(b===B.GLASS)  show = !OPAQUE[nb] && nb!==B.GLASS;
       else                  show = !OPAQUE[nb];
       if(!show) continue;
@@ -2265,7 +2265,7 @@ function useEye(){
   const l=Math.hypot(dx,dz)||1;
   const dirs=['север','северо-восток','восток','юго-восток','юг','юго-запад','запад','северо-запад'];
   const ang=Math.atan2(dx,-dz);
-  const idx=Math.round(((ang%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI/4))%8;
+  const idx=Math.round(((ang%(Math.PI*2))+Math.PI*2)%(Math.PI/2)/(Math.PI/4))%8;
   showToast(dist<24
     ? 'Око дрожит — крепость прямо под тобой! Копай вниз!'
     : `Око летит на ${dirs[idx]}, ~${Math.max(5,Math.round(dist/5)*5)} м`);
@@ -3877,6 +3877,7 @@ function resetWorld(seed){
   applyShadows();
   scanChunks(true);
   for(let k=0;k<6;k++) trySpawnMob();
+  loadVanillaItemTextures();
 }
 function updateWorldLabel(){
   worldLabelEl.textContent = game.worldName+'\n'+MODE_NAMES[game.mode]+'\n'+DIM_NAMES[dim];
@@ -3983,7 +3984,7 @@ function updateSky(dt){
   clouds.position.y=76;
 }
 
-/* ============ АВТОЗАГРУЗКА ВАНИЛЬНЫХ ТЕКСТУР ============ */
+/* ============ АВТОЗАГРУЗКА ВАНИЛЬНЫХ ТЕКСТУР БЛОКОВ ============ */
 const TEX_DIR = 'assets/textures/blocks/';
 const VANILLA_FACES = {
   [B.GRASS]:      ['grass_block_top','grass_block_side','dirt'],
@@ -4014,14 +4015,12 @@ const VANILLA_FACES = {
   [B.END_PORTAL]: ['end_portal','end_portal','end_portal'],
   [B.LAVA]:       ['lava_still','lava_still','lava_still'],
 };
-/* целевые цвета биомной покраски (ваниль, равнины) */
 const TINT_TARGET = {
   'grass_block_top':[145,189,89],
   'oak_leaves':     [119,171,47],
   'water_still':    [63,118,228],
 };
 let grassMul=[1,1,1];
-/* нормируем средний цвет серого тайла к целевому биомному цвету */
 function normalizeTileTo(t,target){
   const tx=(t&15)*16, ty=(t>>4)*16;
   const d=actx2d.getImageData(tx,ty,16,16);
@@ -4038,7 +4037,6 @@ function normalizeTileTo(t,target){
   actx2d.putImageData(d,tx,ty);
   return [kr,kg,kb];
 }
-/* тонировка оверлея отдельным canvas'ом (не трогает землю под ним) */
 function tintOverlayCanvas(img, mul){
   const oc=document.createElement('canvas'); oc.width=oc.height=16;
   const octx=oc.getContext('2d');
@@ -4142,6 +4140,90 @@ async function loadVanillaTextures(){
   });
 }
 
+/* ============ АВТОЗАГРУЗКА ВАНИЛЬНЫХ ТЕКСТУР ПРЕДМЕТОВ ============ */
+const ITEM_DIR_CANDIDATES = ['assets/textures/item/', 'assets/textures/items/'];
+const VANILLA_ITEMS = {
+  [IT.WOOD_PICK]:   'wooden_pickaxe',
+  [IT.STONE_PICK]:  'stone_pickaxe',
+  [IT.IRON_PICK]:   'iron_pickaxe',
+  [IT.DIAMOND_PICK]:'diamond_pickaxe',
+  [IT.WOOD_AXE]:    'wooden_axe',
+  [IT.STONE_AXE]:   'stone_axe',
+  [IT.IRON_AXE]:    'iron_axe',
+  [IT.DIAMOND_AXE]: 'diamond_axe',
+  [IT.WOOD_SWORD]:  'wooden_sword',
+  [IT.STONE_SWORD]: 'stone_sword',
+  [IT.IRON_SWORD]:  'iron_sword',
+  [IT.DIAMOND_SWORD]:'diamond_sword',
+  [IT.STICK]:       'stick',
+  [IT.COAL]:        'coal',
+  [IT.RAW_IRON]:    'raw_iron',
+  [IT.IRON_INGOT]:  'iron_ingot',
+  [IT.DIAMOND]:     'diamond',
+  [IT.RAW_PORK]:    'porkchop',
+  [IT.COOKED_PORK]: 'cooked_porkchop',
+  [IT.RAW_BEEF]:    'beef',
+  [IT.STEAK]:       'cooked_beef',
+  [IT.RAW_CHICKEN]: 'chicken',
+  [IT.COOKED_CHICKEN]:'cooked_chicken',
+  [IT.BUCKET]:      'bucket',
+  [IT.BUCKET_WATER]:'water_bucket',
+  [IT.BUCKET_LAVA]: 'lava_bucket',
+  [IT.APPLE]:       'apple',
+  [IT.FLINT_STEEL]: 'flint_and_steel',
+  [IT.BLAZE_ROD]:   'blaze_rod',
+  [IT.BLAZE_POWDER]:'blaze_powder',
+  [IT.ENDER_PEARL]: 'ender_pearl',
+  [IT.ENDER_EYE]:   'ender_eye',
+};
+let itemDir = null;
+async function detectItemDir(){
+  if(itemDir!==null) return itemDir;
+  for(const dir of ITEM_DIR_CANDIDATES){
+    const ok = await new Promise(res=>{
+      const img=new Image();
+      img.onload=()=>res(true);
+      img.onerror=()=>res(false);
+      img.src=dir+'stick.png';
+    });
+    if(ok){ itemDir=dir; return dir; }
+  }
+  itemDir=false;
+  return false;
+}
+function loadItemTex(name){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>res(img);
+    img.onerror=()=>res(null);
+    img.src=itemDir+name+'.png';
+  });
+}
+async function loadVanillaItemTextures(){
+  const dir = await detectItemDir();
+  if(!dir){ console.log('[Предметы] папка textures/item не найдена — остаются процедурные иконки'); return; }
+  const entries=Object.entries(VANILLA_ITEMS);
+  const results=await Promise.all(entries.map(([id,name])=>loadItemTex(name)));
+  let applied=0;
+  for(let i=0;i<entries.length;i++){
+    const [id,name]=entries[i];
+    const img=results[i];
+    if(!img) continue;
+    const c=document.createElement('canvas'); c.width=c.height=48;
+    const ctx=c.getContext('2d');
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(img,0,0,16,16,0,0,48,48);
+    ICON[id]=c.toDataURL();
+    ICONC[id]=c;
+    applied++;
+  }
+  if(applied){
+    renderHotbar();
+    if(invOpen) renderInvUI();
+    console.log('%c[Предметы] иконок из пака: '+applied,'color:#5c5');
+  }
+}
+
 /* ============ ГЛАВНЫЙ ЦИКЛ ============ */
 function updateMenuCamera(t){
   const a=t*0.05;
@@ -4198,6 +4280,7 @@ syncSettingsUI();
 refreshScreens();
 scanChunks(true);
 loadVanillaTextures();
+loadVanillaItemTextures();
 requestAnimationFrame(loop);
 </script>
 </body>
