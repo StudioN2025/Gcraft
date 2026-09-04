@@ -23,6 +23,9 @@
   #crosshair::before, #crosshair::after { content:''; position:absolute; background:#fff; }
   #crosshair::before { left:9px; top:0; width:2px; height:20px; }
   #crosshair::after { left:0; top:9px; width:20px; height:2px; }
+  #crosshair img { width:20px; height:20px; image-rendering:pixelated; display:none; mix-blend-mode:normal; }
+  body.hud-tex #crosshair::before, body.hud-tex #crosshair::after { display:none; }
+  body.hud-tex #crosshair img { display:block; }
   #bossbar { position:fixed; top:14px; left:50%; transform:translateX(-50%); width:min(70vw,520px);
              display:none; flex-direction:column; align-items:center; gap:3px; z-index:6; }
   #bossbar span { font-size:20px; color:#f4b8ff; text-shadow:2px 2px 0 rgba(0,0,0,.8); }
@@ -36,9 +39,12 @@
   #hotbar { position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
             display:flex; padding:3px; background:rgba(10,10,10,.5);
             border:2px solid rgba(0,0,0,.65); pointer-events:auto; touch-action:none; z-index:6; }
+  body.hud-tex #hotbar { background:none; border:none; padding:0; }
   .slot { width:52px; height:52px; margin:1px; position:relative; display:flex; align-items:center; justify-content:center;
           background:rgba(28,28,28,.55); border:2px solid; border-color:#2c2c2c #7f7f7f #7f7f7f #2c2c2c; }
+  body.hud-tex .slot { background:none; border:none; width:50px; height:50px; margin:0; }
   .slot.sel { border-color:#fff; box-shadow:0 0 0 2px #fff; }
+  body.hud-tex .slot.sel { border:none; box-shadow:none; outline:2px solid #fff; outline-offset:1px; }
   .slot .num { position:absolute; top:0; left:3px; font-size:15px; color:#ddd; text-shadow:1px 1px 0 #000; }
   .slot .cnt { position:absolute; right:3px; bottom:0; font-size:19px; color:#fff; text-shadow:1px 1px 0 #000; }
   .slot img { width:44px; height:44px; image-rendering:pixelated; pointer-events:none; }
@@ -224,7 +230,7 @@
   <div id="waterOverlay"></div>
   <div id="lavaOverlay"></div>
   <div id="hurtOverlay"></div>
-  <div id="crosshair"></div>
+  <div id="crosshair"><img id="crosshairImg" draggable="false" alt=""></div>
   <div id="bossbar"><span>Эндер-дракон</span><div class="bbTrack"><i id="bbFill"></i></div></div>
   <div id="stats"></div>
   <div id="worldLabel"></div>
@@ -1115,21 +1121,24 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-/* пещеры: туннели минимум на 6 блоков под поверхностью, редкие выходы; залы — глубже 26 */
+/* пещеры: туннели + залы; на поверхности — воронки-входы по отдельному шуму */
 function isCave(x,y,z,h){
   if(y<4 || y>46) return false;
   const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
-  if(Math.abs(a) < 0.036){
+  if(Math.abs(a) < 0.042){
     const b2 = vnoise3(x*0.021+520.7, y*0.045+520.7, z*0.021-311.3) - 0.5;
-    if(Math.abs(b2) < 0.036){
+    if(Math.abs(b2) < 0.042){
       if(y < h-6) return true;
-      if(y < h-1 && vnoise3(x*0.03+3131, y*0.06, z*0.03-3131) > 0.88) return true;
+      // выход на поверхность: воронки на склонах — вход в пещеру сверху
+      if(y >= h-6 && y <= h){
+        const funnel = fbm(x*0.012-5000, z*0.012+5000, 2);
+        if(funnel > 0.62 && vnoise3(x*0.05+7777, y*0.05, z*0.05-7777) > 0.6) return true;
+      }
     }
   }
   if(y<26 && y<h-8 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.82) return true;
   return false;
 }
-/* жила руды: зародыш в 4×4×4-ячейке + маленький радиус (компактные гнёзда) */
 function oreVein(x,y,z,salt,prob,r){
   const cx=x>>2, cy=y>>2, cz=z>>2;
   if(hash3(cx*31+salt, cy*17, cz*13) > prob) return false;
@@ -2265,7 +2274,7 @@ function useEye(){
   const l=Math.hypot(dx,dz)||1;
   const dirs=['север','северо-восток','восток','юго-восток','юг','юго-запад','запад','северо-запад'];
   const ang=Math.atan2(dx,-dz);
-  const idx=Math.round(((ang%(Math.PI*2))+Math.PI*2)%(Math.PI/2)/(Math.PI/4))%8;
+  const idx=Math.round(((ang%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI/4))%8;
   showToast(dist<24
     ? 'Око дрожит — крепость прямо под тобой! Копай вниз!'
     : `Око летит на ${dirs[idx]}, ~${Math.max(5,Math.round(dist/5)*5)} м`);
@@ -4140,7 +4149,7 @@ async function loadVanillaTextures(){
   });
 }
 
-/* ============ АВТОЗАГРУЗКА ВАНИЛЬНЫХ ТЕКСТУР ПРЕДМЕТОВ ============ */
+/* ============ АВТОЗАГРУЗКА ТЕКСТУР ПРЕДМЕТОВ ============ */
 const ITEM_DIR_CANDIDATES = ['assets/textures/item/', 'assets/textures/items/'];
 const VANILLA_ITEMS = {
   [IT.WOOD_PICK]:   'wooden_pickaxe',
@@ -4201,7 +4210,7 @@ function loadItemTex(name){
 }
 async function loadVanillaItemTextures(){
   const dir = await detectItemDir();
-  if(!dir){ console.log('[Предметы] папка textures/item не найдена — остаются процедурные иконки'); return; }
+  if(!dir){ console.log('[Предметы] папка textures/item не найдена'); return; }
   const entries=Object.entries(VANILLA_ITEMS);
   const results=await Promise.all(entries.map(([id,name])=>loadItemTex(name)));
   let applied=0;
@@ -4222,6 +4231,43 @@ async function loadVanillaItemTextures(){
     if(invOpen) renderInvUI();
     console.log('%c[Предметы] иконок из пака: '+applied,'color:#5c5');
   }
+}
+
+/* ============ АВТОЗАГРУЗКА HUD-СПРАЙТОВ ============ */
+const HUD_DIR = 'assets/textures/gui/sprites/hud/';
+const HUD_FILES = ['hotbar','hotbar_selection','crosshair','heart_full','heart_half','heart_empty',
+                   'food_full','food_half','food_empty','air'];
+const hudTex = {};
+async function loadHudSprites(){
+  await Promise.all(HUD_FILES.map(n=>new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{ hudTex[n]=img; res(); };
+    img.onerror=()=>{ hudTex[n]=null; res(); };
+    img.src=HUD_DIR+n+'.png';
+  })));
+  if(hudTex.crosshair){
+    document.getElementById('crosshairImg').src=hudTex.crosshair.src;
+    document.body.classList.add('hud-tex');
+  }
+  if(hudTex.hotbar){
+    hotbarEl.style.backgroundImage=`url(${hudTex.hotbar.src})`;
+    hotbarEl.style.backgroundSize='100% 100%';
+    hotbarEl.style.backgroundRepeat='no-repeat';
+    hotbarEl.style.border='none';
+    hotbarEl.style.background='none';
+    // рисуем хотбар-картинку как фон через canvas-обёртку: проще всего — подложка-картинка
+    hotbarEl.style.padding='6px';
+    hotbarEl.style.background=`url(${hudTex.hotbar.src})`;
+    hotbarEl.style.backgroundSize='100% 100%';
+    hotbarEl.style.imageRendering='pixelated';
+  }
+  if(hudTex.hotbar_selection){
+    slotEls.forEach(s=>{
+      s.el.style.outline='none';
+      s.el.classList.add('hudtex-slot');
+    });
+  }
+  console.log('%c[HUD] спрайтов загружено: '+Object.values(hudTex).filter(Boolean).length,'color:#5c5');
 }
 
 /* ============ ГЛАВНЫЙ ЦИКЛ ============ */
@@ -4281,6 +4327,7 @@ refreshScreens();
 scanChunks(true);
 loadVanillaTextures();
 loadVanillaItemTextures();
+loadHudSprites();
 requestAnimationFrame(loop);
 </script>
 </body>
