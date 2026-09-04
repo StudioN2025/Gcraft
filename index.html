@@ -1115,14 +1115,27 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-function isCave(x,y,z){
+/* пещеры: туннели минимум на 6 блоков под поверхностью, редкие входы; залы — глубже 26 */
+function isCave(x,y,z,h){
+  if(y<4 || y>46) return false;
   const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
-  if(Math.abs(a) < 0.045){
+  if(Math.abs(a) < 0.036){
     const b2 = vnoise3(x*0.021+520.7, y*0.045+520.7, z*0.021-311.3) - 0.5;
-    if(Math.abs(b2) < 0.045) return true;
+    if(Math.abs(b2) < 0.036){
+      if(y < h-6) return true;
+      if(y < h-1 && vnoise3(x*0.03+3131, y*0.06, z*0.03-3131) > 0.88) return true;
+    }
   }
-  if(y < 30 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.78) return true;
+  if(y<26 && y<h-8 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.82) return true;
   return false;
+}
+/* жила руды: зародыш в 4×4×4-ячейке + маленький радиус (компактные гнёзда) */
+function oreVein(x,y,z,salt,prob,r){
+  const cx=x>>2, cy=y>>2, cz=z>>2;
+  if(hash3(cx*31+salt, cy*17, cz*13) > prob) return false;
+  const ox=hash3(cx+salt,cy,cz)*4, oy=hash3(cx,cy+salt,cz)*4, oz=hash3(cx,cy,cz+salt)*4;
+  const dx=(x&3)+0.5-ox, dy=(y&3)+0.5-oy, dz=(z&3)+0.5-oz;
+  return dx*dx+dy*dy+dz*dz <= r*r;
 }
 function setInChunk(data,cx,cz,wx,wy,wz,b,soft){
   if(wy<0||wy>=CY) return;
@@ -1157,15 +1170,15 @@ function genChunkOver(cx,cz){
       else if(y<h-3) b=B.STONE;
       else if(y<h) b = h<=SEA+1 ? B.SAND : (h>=46 ? B.STONE : B.DIRT);
       else b = h<=SEA+1 ? B.SAND : h>=50 ? B.SNOW : h>=46 ? B.STONE : B.GRASS;
-      if(b!==B.BEDROCK && canCarve && y>=3 && isCave(wx,y,wz)){
+      if(b!==B.BEDROCK && canCarve && isCave(wx,y,wz,h)){
         data[(y*16+z)*16+x] = (y<=9 ? B.LAVA : B.AIR);
         continue;
       }
       if(b===B.STONE){
-        if(y<52 && vnoise3(wx*0.30, y*0.30, wz*0.30) > 0.80) b=B.COAL_ORE;
-        else if(y<26 && vnoise3(wx*0.31+1000, y*0.31+1000, wz*0.31+1000) > 0.835) b=B.IRON_ORE;
-        else if(y<14 && vnoise3(wx*0.32-1000, y*0.32-1000, wz*0.32-1000) > 0.86) b=B.DIAMOND_ORE;
-        else if(y<12 && vnoise3(wx*0.29+2222, y*0.29+2222, wz*0.29-2222) > 0.875) b=B.OBSIDIAN;
+        if(y<52  && oreVein(wx,y,wz,101,0.10,  1.25)) b=B.COAL_ORE;
+        else if(y<28 && oreVein(wx,y,wz,202,0.06,  1.10)) b=B.IRON_ORE;
+        else if(y<14 && oreVein(wx,y,wz,303,0.028, 1.00)) b=B.DIAMOND_ORE;
+        else if(y<12 && oreVein(wx,y,wz,404,0.03,  1.05)) b=B.OBSIDIAN;
       }
       data[(y*16+z)*16+x]=b;
     }
@@ -1365,7 +1378,7 @@ function buildChunk(c){
       const F=FACES[f];
       const nb=at(wx+F.dir[0], y+F.dir[1], wz+F.dir[2]);
       let show;
-      if(b===B.LEAVES)      show = !OPAQUE[nb] && nb!==B.LEAVES;
+      if(b===B.LEAVES)      show = !OPAQUE[nb];           // листва — все грани
       else if(b===B.GLASS)  show = !OPAQUE[nb] && nb!==B.GLASS;
       else                  show = !OPAQUE[nb];
       if(!show) continue;
@@ -4001,11 +4014,45 @@ const VANILLA_FACES = {
   [B.END_PORTAL]: ['end_portal','end_portal','end_portal'],
   [B.LAVA]:       ['lava_still','lava_still','lava_still'],
 };
-const TEX_TINT = {
-  'grass_block_top': [0.569,0.741,0.349],
-  'oak_leaves':      [0.467,0.671,0.184],
-  'water_still':     [0.247,0.463,0.894],
+/* целевые цвета биомной покраски (ваниль, равнины) */
+const TINT_TARGET = {
+  'grass_block_top':[145,189,89],
+  'oak_leaves':     [119,171,47],
+  'water_still':    [63,118,228],
 };
+let grassMul=[1,1,1];
+/* нормируем средний цвет серого тайла к целевому биомному цвету */
+function normalizeTileTo(t,target){
+  const tx=(t&15)*16, ty=(t>>4)*16;
+  const d=actx2d.getImageData(tx,ty,16,16);
+  let ar=0,ag=0,ab=0;
+  for(let i=0;i<d.data.length;i+=4){ ar+=d.data[i]; ag+=d.data[i+1]; ab+=d.data[i+2]; }
+  ar/=256; ag/=256; ab/=256;
+  const cl=v=>clamp(v,0.4,2.6);
+  const kr=ar>10?cl(target[0]/ar):1, kg=ag>10?cl(target[1]/ag):1, kb=ab>10?cl(target[2]/ab):1;
+  for(let i=0;i<d.data.length;i+=4){
+    d.data[i]  = clamp(d.data[i]  *kr,0,255);
+    d.data[i+1]= clamp(d.data[i+1]*kg,0,255);
+    d.data[i+2]= clamp(d.data[i+2]*kb,0,255);
+  }
+  actx2d.putImageData(d,tx,ty);
+  return [kr,kg,kb];
+}
+/* тонировка оверлея отдельным canvas'ом (не трогает землю под ним) */
+function tintOverlayCanvas(img, mul){
+  const oc=document.createElement('canvas'); oc.width=oc.height=16;
+  const octx=oc.getContext('2d');
+  octx.imageSmoothingEnabled=false;
+  octx.drawImage(img,0,0,16,16);
+  const od=octx.getImageData(0,0,16,16);
+  for(let i=0;i<od.data.length;i+=4){
+    od.data[i]  = clamp(od.data[i]  *mul[0],0,255);
+    od.data[i+1]= clamp(od.data[i+1]*mul[1],0,255);
+    od.data[i+2]= clamp(od.data[i+2]*mul[2],0,255);
+  }
+  octx.putImageData(od,0,0);
+  return oc;
+}
 const _texCache = new Map();
 function loadTexFile(name){
   if(_texCache.has(name)) return Promise.resolve(_texCache.get(name));
@@ -4022,17 +4069,6 @@ function blitFirstFrame(img,t){
   actx2d.imageSmoothingEnabled=false;
   if(img.width===img.height) actx2d.drawImage(img,tx,ty,16,16);
   else actx2d.drawImage(img,0,0,img.width,img.width,tx,ty,16,16);
-}
-function tintTile(t,tint){
-  if(!tint) return;
-  const tx=(t&15)*16, ty=(t>>4)*16;
-  const d=actx2d.getImageData(tx,ty,16,16);
-  for(let i=0;i<d.data.length;i+=4){
-    d.data[i]  = clamp(d.data[i]  *tint[0],0,255);
-    d.data[i+1]= clamp(d.data[i+1]*tint[1],0,255);
-    d.data[i+2]= clamp(d.data[i+2]*tint[2],0,255);
-  }
-  actx2d.putImageData(d,tx,ty);
 }
 function recalcAvgTile(t){
   try{
@@ -4058,6 +4094,7 @@ async function loadVanillaTextures(){
   }
   await Promise.all([...need].map(loadTexFile));
   let applied=0;
+  grassMul=[1,1,1];
   for(const k in VANILLA_FACES){
     const id=+k, bl=BLOCKS[id];
     if(!bl) continue;
@@ -4069,15 +4106,16 @@ async function loadVanillaTextures(){
       if(!img) continue;
       clearTile(t);
       blitFirstFrame(img,t);
-      if(name==='grass_block_side'){
+      if(name==='grass_block_top'){
+        grassMul = normalizeTileTo(t, TINT_TARGET['grass_block_top']);
+      } else if(name==='grass_block_side'){
         const ov=_texCache.get('grass_block_side_overlay');
         if(ov){
-          const tx=(t&15)*16, ty=(t>>4)*16;
-          actx2d.drawImage(ov,tx,ty,16,16);
-          tintTile(t,TEX_TINT['grass_block_top']);
+          const oc=tintOverlayCanvas(ov, grassMul);
+          actx2d.drawImage(oc,(t&15)*16,(t>>4)*16);
         }
-      } else {
-        tintTile(t,TEX_TINT[name]);
+      } else if(TINT_TARGET[name]){
+        normalizeTileTo(t, TINT_TARGET[name]);
       }
       recalcAvgTile(t);
       applied++;
