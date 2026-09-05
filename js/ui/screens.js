@@ -1,16 +1,11 @@
-import { G } from '../core/state.js';
+import { G, recalcView } from '../core/state.js';
 import { hashSeed } from '../core/utils.js';
-import { applyShadows, sfx, ac, masterGain } from '../engine/renderer.js';
-import { recalcView } from '../core/state.js';
+import { applyShadows, sfx, ac, getMasterGain } from '../engine/renderer.js';
 import { resetWorld, scanChunksNow } from '../world/reset.js';
 import { clearAllMods } from '../data/mods.js';
 import { buildAtlas } from '../engine/atlas.js';
-import { showScreen as _ss } from './screensRef.js';
 
 let selMode='survival';
-export function refreshScreens(){
-  window._refreshScreens();
-}
 export function lockPointer(){
   window._lockPointer();
 }
@@ -51,7 +46,8 @@ export function initScreens(){
   volRange.addEventListener('input',()=>{
     G.settings.vol=volRange.value/100;
     volVal.textContent=volRange.value+'%';
-    if(masterGain) masterGain.gain.value=G.settings.vol;
+    const mg=getMasterGain();
+    if(mg) mg.gain.value=G.settings.vol;
   });
   shadowSw.addEventListener('click',()=>{
     G.settings.shadows=!G.settings.shadows;
@@ -76,7 +72,7 @@ export function initScreens(){
     resetWorld(hashSeed(document.getElementById('seedInp').value));
     G.worldCreated=true; G.screenState='game';
     G.yaw=Math.random()*Math.PI*2; G.pitch=-0.12;
-    window._showToast((window._IS_TOUCH)?'Тап — поставить • Удержать — сломать':'Нажми E, чтобы открыть инвентарь');
+    window._showToast(window._IS_TOUCH?'Тап — поставить • Удержать — сломать':'Нажми E, чтобы открыть инвентарь');
     window._refreshScreens(); window._mobileBoost(); window._lockPointer();
   });
   ['worldNameInp','seedInp'].forEach(id=>{
