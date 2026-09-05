@@ -1,18 +1,17 @@
 import * as THREE from 'three';
 import { G } from '../core/state.js';
-import { clamp } from '../core/utils.js';
-import { B, IT, SOLID, NEIGH, HARDNESS, DROPS, PICKS, AXES, PICK_TIER, ORE_TIER, RING,
-         nameOf, isBlockItem, isTool, ITEMS } from '../data/blocks.js';
-import { camera, sfx, crackMesh, crackMat, crackTexs, hl } from '../engine/renderer.js';
+import { B, IT, ITEMS, SOLID, NEIGH, HARDNESS, DROPS, PICKS, AXES, PICK_TIER, ORE_TIER, RING,
+         nameOf, isBlockItem, isTool } from '../data/blocks.js';
+import { camera, scene, sfx, crackMesh, crackMat, crackTexs, hl } from '../engine/renderer.js';
 import { ICONC } from '../engine/atlas.js';
-import { getBlock, setBlockWorld, isWaterAt, isLavaAt, floorYAt, surfaceYAt,
-         portalsReg, getDim } from '../world/world.js';
-import { spawnParticles } from '../world/particles.js';
-import { spawnDrop } from './drops.js';
+import { getBlock, setBlockWorld, surfaceYAt, portalsReg } from '../world/world.js';
+import { spawnParticles, spawnBreakParticles } from '../world/particles.js';
+import { spawnDrop, addItem } from './drops.js';
 import { renderHotbar, showToast } from '../ui/hud.js';
-import { renderInvUI, openInventory, openFurnace, openChest } from './inventory.js';
+import { openInventory, openFurnace, openChest, closeInventory, furnaces, chests,
+         furnKeyCur, chestKeyCur, renderInvUI } from './inventory.js';
 import { pickMob, tryAttack, spawnDragon, isDragonDead } from '../entities/mobs.js';
-import { getChunks, setDimension } from '../world/world.js';
+import { setDimension } from '../world/world.js';
 import { vibrate } from '../core/utils.js';
 
 const _dir=new THREE.Vector3();
@@ -69,27 +68,28 @@ function miningTime(b){
   }
   return t;
 }
-function attackDmg(){
+export function attackDmgOf(){
   const it=G.inv[G.slot];
   if(it && isTool(it.id) && ITEMS[it.id].tool.dmg) return ITEMS[it.id].tool.dmg;
   return 1;
 }
 const posKey = (x,y,z)=> x+','+y+','+z;
-function breakBlock(x,y,z,b){
+export { posKey };
+export function breakBlock(x,y,z,b){
   if(b===B.FURNACE){
-    const f=window._furnaces.get(posKey(x,y,z));
+    const f=furnaces.get(posKey(x,y,z));
     if(f){
       for(const s of [f.inp,f.fuel,f.out]) if(s) spawnDrop(s.id,s.count, x+0.5,y+0.5,z+0.5);
-      window._furnaces.delete(posKey(x,y,z));
-      if(G.uiMode==='furnace' && window._furnKeyCur===posKey(x,y,z)) window._closeInventory(true);
+      furnaces.delete(posKey(x,y,z));
+      if(G.uiMode==='furnace' && furnKeyCur===posKey(x,y,z)) closeInventory(true);
     }
   }
   if(b===B.CHEST){
-    const arr=window._chests.get(posKey(x,y,z));
+    const arr=chests.get(posKey(x,y,z));
     if(arr){
       for(const s of arr) if(s) spawnDrop(s.id,s.count===Infinity?1:s.count, x+0.5,y+0.5,z+0.5);
-      window._chests.delete(posKey(x,y,z));
-      if(G.uiMode==='chest' && window._chestKeyCur===posKey(x,y,z)) window._closeInventory(true);
+      chests.delete(posKey(x,y,z));
+      if(G.uiMode==='chest' && chestKeyCur===posKey(x,y,z)) closeInventory(true);
     }
   }
   let nb=B.AIR;
@@ -98,7 +98,7 @@ function breakBlock(x,y,z,b){
     if(n===B.WATER||n===B.LAVA){ nb=n; break; }
   }
   setBlockWorld(x,y,z,nb);
-  window._spawnBreakParticles(x,y,z,b);
+  spawnBreakParticles(x,y,z,b);
   sfx('break');
   vibrate(25);
   if(G.game.mode==='survival'){
@@ -108,7 +108,7 @@ function breakBlock(x,y,z,b){
     else if(b===B.GLASS) dropId = -1;
     else if(!canHarvest(b)) dropId = -1;
     else dropId = DROPS[b]!==undefined ? DROPS[b] : b;
-    if(dropId>=0 && window._addItem(dropId,1)) sfx('pop');
+    if(dropId>=0 && addItem(dropId,1)) sfx('pop');
     const held=G.inv[G.slot];
     if(held && isTool(held.id)){
       held.dur--;
@@ -200,13 +200,13 @@ function buildPortalFrame(ix,iy,iz){
     set(ix+2,iy+j,iz,B.OBSIDIAN);
     for(let i=0;i<2;i++) set(ix+i,iy+j,iz,B.PORTAL);
   }
+  const NON_SOLID=new Set([B.AIR,B.LEAVES,B.WATER,B.GLASS,B.PORTAL,B.LAVA]);
   for(let dx=-2;dx<=3;dx++) for(let dy=0;dy<4;dy++) for(let dz=-1;dz<=1;dz++){
     if(dz===0 && dx>=-1 && dx<=2) continue;
     const b=getBlock(ix+dx,iy+dy,iz+dz);
-    if(b!==B.AIR && !SOLID[b]===false && b!==B.AIR && !OPQ(b)) set(ix+dx,iy+dy,iz+dz,B.AIR);
+    if(!NON_SOLID.has(b)) set(ix+dx,iy+dy,iz+dz,B.AIR);
   }
 }
-function OPQ(b){ return ![B.AIR,B.LEAVES,B.WATER,B.GLASS,B.PORTAL,B.LAVA].includes(b); }
 export function ensurePortalAt(d, wx, wz){
   const list=portalsReg[d];
   let best=null, bd=1e9;
@@ -271,22 +271,25 @@ export function travelPortal(){
 export function toEnd(){
   if(G.portalCd>0) return;
   setDimension(2);
-  for(let dx=-3;dx<=3;dx++) for(let dz=-3;dz<=3;dz++) getChunks().get(0)||0;
-  // сгенерировать зону острова
-  for(let dx=-3;dx<=3;dx++) for(let dz=-3;dz<=3;dz++){
-    const k=(dx*65536)+dz;
-    if(!getChunks().has(k)) window._getChunkFn(dx,dz);
+  import('../world/world.js').then(({getChunk})=>{
+    for(let dx=-3;dx<=3;dx++) for(let dz=-3;dz<=3;dz++) getChunk(dx,dz);
+    import('../engine/meshing.js').then(({buildChunk})=>{
+      for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++){
+        const c=getBlock(0,0,0)!==null ? null : null;
+      }
+      buildEndSpawn(getChunk, buildChunk);
+    });
+  });
+  function buildEndSpawn(getChunk, buildChunk){
+    import('../world/world.js').then(({surfaceYAt: sYAt})=>{
+      const ty=sYAt(0,0);
+      G.player.pos.set(0.5, ty, 0.5);
+      G.portalCd=4;
+      sfx('portal');
+      showToast('Энд-мир. Дракон Края ждёт...');
+      if(!isDragonDead()) spawnDragon();
+    });
   }
-  for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++){
-    const c=getChunks().get((dx*65536)+dz);
-    if(c && !c.built) window._buildChunkFn(c);
-  }
-  const ty=surfaceYAt(0,0);
-  G.player.pos.set(0.5, ty, 0.5);
-  G.portalCd=4;
-  sfx('portal');
-  showToast('Энд-мир. Дракон Края ждёт...');
-  if(!isDragonDead()) spawnDragon();
 }
 export function exitEnd(){
   if(G.portalCd>0) return;
@@ -368,7 +371,7 @@ export function doPlace(force=false){
       checkEndPortalComplete();
       return;
     }
-    if(getDim()===2){ showToast('Ты уже в Энд-мире'); return; }
+    if(G.dim===2){ showToast('Ты уже в Энд-мире'); return; }
     useEye();
     if(G.game.mode==='survival'){ held.count--; if(held.count<=0) G.inv[G.slot]=null; renderHotbar(); }
     return;
@@ -423,7 +426,7 @@ export function updateEyeFx(dt){
     e.sp.material.rotation+=dt*4;
     if(e.age>1.5){
       spawnParticles(e.sp.position.x-0.5,e.sp.position.y-0.5,e.sp.position.z-0.5,[80,220,160],8,2);
-      window._scene.remove(e.sp); eyeFx.splice(i,1);
+      scene.remove(e.sp); eyeFx.splice(i,1);
     }
   }
 }
@@ -443,7 +446,7 @@ function useEye(){
   s.scale.set(0.5,0.5,0.42);
   const d=camera.getWorldDirection(_dir);
   s.position.copy(camera.position).addScaledVector(d,0.6);
-  window._scene.add(s);
+  scene.add(s);
   eyeFx.push({sp:s, vx:dx/l*6, vy:2.2, vz:dz/l*6, age:0});
 }
 function checkEndPortalComplete(){
@@ -456,6 +459,7 @@ function checkEndPortalComplete(){
   showToast('★ Портал в Энд активирован! Прыгай!');
   sfx('portal');
 }
+const mine={active:false,x:0,y:0,z:0,progress:0,hitT:0};
 export function updateInteraction(t,dt){
   const mobHit=pickMob();
   const hit = mobHit ? null : raycastBlock(reachNow());
@@ -468,30 +472,30 @@ export function updateInteraction(t,dt){
   const touchHeld = G.touchLook.id!==null && G.touchLook.mining && !G.touchLook.moved;
   const held = mouseHeld || touchHeld;
   if(mobHit){
-    crackMesh.visible=false; G.mine.active=false;
+    crackMesh.visible=false; mine.active=false;
     if(held && t-G.lastAtk>0.45) tryAttack(mobHit, t);
     return;
   }
   if(G.game.mode==='creative'){
-    crackMesh.visible=false; G.mine.active=false;
+    crackMesh.visible=false; mine.active=false;
     if(held && hit && t-G.lastMine>=0.24){ G.lastMine=t; breakBlock(hit.x,hit.y,hit.z,hit.b); }
   } else {
     if(held && hit && isFinite(HARDNESS[hit.b])){
-      if(!G.mine.active || G.mine.x!==hit.x || G.mine.y!==hit.y || G.mine.z!==hit.z){
-        G.mine.active=true; G.mine.x=hit.x; G.mine.y=hit.y; G.mine.z=hit.z;
-        G.mine.progress=0; G.mine.hitT=0;
+      if(!mine.active || mine.x!==hit.x || mine.y!==hit.y || mine.z!==hit.z){
+        mine.active=true; mine.x=hit.x; mine.y=hit.y; mine.z=hit.z;
+        mine.progress=0; mine.hitT=0;
       }
-      G.mine.progress += dt/miningTime(hit.b);
-      G.mine.hitT -= dt;
-      if(G.mine.hitT<=0){ G.mine.hitT=0.24; sfx('dig'); }
+      mine.progress += dt/miningTime(hit.b);
+      mine.hitT -= dt;
+      if(mine.hitT<=0){ mine.hitT=0.24; sfx('dig'); }
       crackMesh.visible=true;
       crackMesh.position.set(hit.x+0.5,hit.y+0.5,hit.z+0.5);
-      crackMat.map = crackTexs[Math.min(3,(G.mine.progress*4)|0)];
-      if(G.mine.progress>=1){
+      crackMat.map = crackTexs[Math.min(3,(mine.progress*4)|0)];
+      if(mine.progress>=1){
         breakBlock(hit.x,hit.y,hit.z,hit.b);
-        G.mine.active=false; crackMesh.visible=false;
+        mine.active=false; crackMesh.visible=false;
       }
-    } else { G.mine.active=false; crackMesh.visible=false; }
+    } else { mine.active=false; crackMesh.visible=false; }
   }
   if(!G.fallback && G.mouseBtn[2] && t-G.lastPlace>=0.24){
     G.lastPlace=t;
