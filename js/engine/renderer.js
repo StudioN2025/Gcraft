@@ -94,6 +94,7 @@ export function ac(){
   if(masterGain) masterGain.gain.value=G.settings.vol;
   return AC;
 }
+export function getMasterGain(){ return masterGain; }
 export function sfx(type){
   try{
     const a=ac(), t0=a.currentTime, out=masterGain;
