@@ -39,12 +39,9 @@
   #hotbar { position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
             display:flex; padding:3px; background:rgba(10,10,10,.5);
             border:2px solid rgba(0,0,0,.65); pointer-events:auto; touch-action:none; z-index:6; }
-  body.hud-tex #hotbar { background:none; border:none; padding:0; }
   .slot { width:52px; height:52px; margin:1px; position:relative; display:flex; align-items:center; justify-content:center;
           background:rgba(28,28,28,.55); border:2px solid; border-color:#2c2c2c #7f7f7f #7f7f7f #2c2c2c; }
-  body.hud-tex .slot { background:none; border:none; width:50px; height:50px; margin:0; }
   .slot.sel { border-color:#fff; box-shadow:0 0 0 2px #fff; }
-  body.hud-tex .slot.sel { border:none; box-shadow:none; outline:2px solid #fff; outline-offset:1px; }
   .slot .num { position:absolute; top:0; left:3px; font-size:15px; color:#ddd; text-shadow:1px 1px 0 #000; }
   .slot .cnt { position:absolute; right:3px; bottom:0; font-size:19px; color:#fff; text-shadow:1px 1px 0 #000; }
   .slot img { width:44px; height:44px; image-rendering:pixelated; pointer-events:none; }
@@ -54,7 +51,7 @@
                 display:flex; justify-content:space-between; align-items:flex-end; pointer-events:none; }
   #rightBars { display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
   #health, #hunger, #air { display:flex; gap:1px; }
-  #health canvas, #hunger canvas { width:21px; height:18px; image-rendering:pixelated; }
+  #health canvas, #hunger canvas { width:18px; height:18px; image-rendering:pixelated; }
   #air canvas { width:18px; height:18px; image-rendering:pixelated; }
   #itemName { position:fixed; bottom:104px; left:50%; transform:translateX(-50%);
               font-size:24px; color:#fff; text-shadow:2px 2px 0 rgba(0,0,0,.8);
@@ -306,7 +303,7 @@
     <button id="btnSettings" class="mcbtn">Настройки</button>
     <button id="btnExit" class="mcbtn danger">Выйти</button>
   </div>
-  <div class="menuFooter">Три измерения • Пещеры • Тени • Моды • Сид: <span id="seedLabel">—</span></div>
+  <div class="menuFooter">Три измерения • Пещеры и каньоны • Тени • Моды • Сид: <span id="seedLabel">—</span></div>
 </div>
 
 <div id="createScreen" class="screen">
@@ -467,7 +464,7 @@ const seedLabelEl = document.getElementById('seedLabel');
 function setSeedLabel(){ if(seedLabelEl) seedLabelEl.textContent = SEED; }
 {
   const sp = document.getElementById('splash');
-  const SPLASHES = ['Дракон ждёт!','Гори, портал!','Око укажет путь!','Тени в настройках!','Полное прохождение!'];
+  const SPLASHES = ['Дракон ждёт!','Гори, портал!','Око укажет путь!','Каньоны — там лава!','Полное прохождение!'];
   if(sp) sp.textContent = SPLASHES[(Math.random()*SPLASHES.length)|0];
 }
 
@@ -1121,23 +1118,28 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-/* пещеры: туннели + залы; на поверхности — воронки-входы по отдельному шуму */
+/* пещеры: туннели + залы; воронки-входы на склонах */
 function isCave(x,y,z,h){
-  if(y<4 || y>46) return false;
+  if(y<4 || y>48) return false;
   const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
   if(Math.abs(a) < 0.042){
     const b2 = vnoise3(x*0.021+520.7, y*0.045+520.7, z*0.021-311.3) - 0.5;
     if(Math.abs(b2) < 0.042){
       if(y < h-6) return true;
-      // выход на поверхность: воронки на склонах — вход в пещеру сверху
-      if(y >= h-6 && y <= h){
-        const funnel = fbm(x*0.012-5000, z*0.012+5000, 2);
-        if(funnel > 0.62 && vnoise3(x*0.05+7777, y*0.05, z*0.05-7777) > 0.6) return true;
-      }
+      if(y <= h && fbm(x*0.010-5000, z*0.010+5000, 2) > 0.58) return true;
     }
   }
   if(y<26 && y<h-8 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.82) return true;
   return false;
+}
+/* каньон: 0 = нет, иначе нижняя Y выработки */
+function canyonColumn(x,z,h){
+  if(h<=SEA+2) return 0;
+  const s = Math.abs(fbm(x*0.0045+9000, z*0.0045-9000, 2)-0.5)*2;
+  if(s>=0.10) return 0;
+  const t = 1 - s/0.10;
+  if(t<0.15 && fbm(x*0.02-3000, z*0.02+3000, 2)<0.45) return 0;
+  return Math.max(9, Math.round(lerp(h-6, 9, t)));
 }
 function oreVein(x,y,z,salt,prob,r){
   const cx=x>>2, cy=y>>2, cz=z>>2;
@@ -1173,13 +1175,14 @@ function genChunkOver(cx,cz){
     const wx=cx*16+x, wz=cz*16+z;
     const h = terrainHeight(wx,wz);
     const canCarve = h > SEA+1;
+    const canyonBottom = canyonColumn(wx, wz, h);
     for(let y=0;y<=h;y++){
       let b;
       if(y===0) b=B.BEDROCK;
       else if(y<h-3) b=B.STONE;
       else if(y<h) b = h<=SEA+1 ? B.SAND : (h>=46 ? B.STONE : B.DIRT);
       else b = h<=SEA+1 ? B.SAND : h>=50 ? B.SNOW : h>=46 ? B.STONE : B.GRASS;
-      if(b!==B.BEDROCK && canCarve && isCave(wx,y,wz,h)){
+      if(b!==B.BEDROCK && canCarve && ((canyonBottom && y>=canyonBottom) || isCave(wx,y,wz,h))){
         data[(y*16+z)*16+x] = (y<=9 ? B.LAVA : B.AIR);
         continue;
       }
@@ -3475,6 +3478,11 @@ function renderHotbar(){
       s.img.style.display='none'; s.cnt.textContent=''; s.dur.style.display='none';
     }
     s.el.classList.toggle('sel', i===slot);
+    if(hudTex.hotbar_selection && i===slot){
+      s.el.style.background=`url(${hudTex.hotbar_selection.src}) center/100% 100% no-repeat`;
+    } else {
+      s.el.style.background='';
+    }
   }
 }
 function selectSlot(i){
@@ -3493,11 +3501,11 @@ const hungerEl=document.getElementById('hunger');
 const airEl=document.getElementById('air');
 const heartCvs=[], hungerCvs=[], airCvs=[];
 for(let i=0;i<10;i++){
-  const c=document.createElement('canvas'); c.width=7; c.height=6;
+  const c=document.createElement('canvas'); c.width=9; c.height=9;
   healthEl.append(c); heartCvs.push(c);
 }
 for(let i=0;i<10;i++){
-  const c=document.createElement('canvas'); c.width=7; c.height=6;
+  const c=document.createElement('canvas'); c.width=9; c.height=9;
   hungerEl.append(c); hungerCvs.push(c);
 }
 for(let i=0;i<10;i++){
@@ -3507,16 +3515,16 @@ for(let i=0;i<10;i++){
 const HEART_MAP=['.XX.XX.','XXXXXXX','XXXXXXX','.XXXXX.','..XXX..','...X...'];
 const DRUM_MAP =['.XXXXX.','XXXXXXX','XXXXXXX','.XXXXX.','...XX..','..X....'];
 function drawMap(c,map,color,half,accent){
-  const ctx=c.getContext('2d'); ctx.clearRect(0,0,7,6);
+  const ctx=c.getContext('2d');
   for(let y=0;y<6;y++) for(let x=0;x<7;x++){
     if(map[y][x]!=='X') continue;
     const filled = half===2 || (half===1 && x<3.5);
     ctx.fillStyle = filled ? ((x===1&&y===1&&accent)?'#ff9d9d':color) : '#3d3d3d';
-    ctx.fillRect(x,y,1,1);
+    ctx.fillRect(x+1,y+1,1,1);
   }
 }
 function drawBubble(c,on){
-  const ctx=c.getContext('2d'); ctx.clearRect(0,0,9,9);
+  const ctx=c.getContext('2d');
   if(!on) return;
   for(let y=0;y<9;y++) for(let x=0;x<9;x++){
     const dx=x-4, dy=y-4;
@@ -3530,23 +3538,48 @@ function renderHealth(){
   if(game.mode!=='survival'){ healthEl.style.display='none'; return; }
   healthEl.style.display='flex';
   for(let i=0;i<10;i++){
+    const ctx=heartCvs[i].getContext('2d');
+    ctx.clearRect(0,0,9,9);
     const hp=player.health;
-    drawMap(heartCvs[i],HEART_MAP,'#e33b3b', hp>=(i+1)*2?2 : hp===i*2+1?1 : 0, true);
+    const fill = hp>=(i+1)*2?2 : hp===i*2+1?1 : 0;
+    if(hudTex.container) ctx.drawImage(hudTex.container,0,0,9,9);
+    else drawMap(heartCvs[i],HEART_MAP,'#3d3d3d',2,false);
+    if(fill>0){
+      const img = fill===2 ? hudTex.full : hudTex.half;
+      if(img) ctx.drawImage(img,0,0,9,9);
+      else drawMap(heartCvs[i],HEART_MAP,'#e33b3b',fill,true);
+    }
   }
 }
 function renderHunger(){
   if(game.mode!=='survival'){ hungerEl.style.display='none'; return; }
   hungerEl.style.display='flex';
   for(let i=0;i<10;i++){
+    const ctx=hungerCvs[i].getContext('2d');
+    ctx.clearRect(0,0,9,9);
     const hu=player.hunger;
-    drawMap(hungerCvs[i],DRUM_MAP,'#b5673a', hu>=(i+1)*2?2 : hu>=i*2+1?1 : 0, false);
+    const fill = hu>=(i+1)*2?2 : hu>=i*2+1?1 : 0;
+    if(hudTex.food_empty) ctx.drawImage(hudTex.food_empty,0,0,9,9);
+    else drawMap(hungerCvs[i],DRUM_MAP,'#3d3d3d',2,false);
+    if(fill>0){
+      const img = fill===2 ? hudTex.food_full : hudTex.food_half;
+      if(img) ctx.drawImage(img,0,0,9,9);
+      else drawMap(hungerCvs[i],DRUM_MAP,'#b5673a',fill,false);
+    }
   }
 }
 function renderAir(){
   if(game.mode!=='survival' || player.air>=9.95){ airEl.style.display='none'; return; }
   airEl.style.display='flex';
   const n=Math.ceil(player.air);
-  for(let i=0;i<10;i++) drawBubble(airCvs[i], i<n);
+  for(let i=0;i<10;i++){
+    const ctx=airCvs[i].getContext('2d');
+    ctx.clearRect(0,0,9,9);
+    if(i<n){
+      if(hudTex.air) ctx.drawImage(hudTex.air,0,0,9,9);
+      else drawBubble(airCvs[i],true);
+    }
+  }
 }
 const hurtEl=document.getElementById('hurtOverlay');
 function flashHurt(){
@@ -4235,8 +4268,10 @@ async function loadVanillaItemTextures(){
 
 /* ============ АВТОЗАГРУЗКА HUD-СПРАЙТОВ ============ */
 const HUD_DIR = 'assets/textures/gui/sprites/hud/';
-const HUD_FILES = ['hotbar','hotbar_selection','crosshair','heart_full','heart_half','heart_empty',
-                   'food_full','food_half','food_empty','air'];
+const HUD_FILES = ['hotbar','hotbar_selection','crosshair',
+                   'container','full','half','hardcore_full','hardcore_half',
+                   'food_full','food_half','food_empty',
+                   'air','air_bursting'];
 const hudTex = {};
 async function loadHudSprites(){
   await Promise.all(HUD_FILES.map(n=>new Promise(res=>{
@@ -4250,23 +4285,12 @@ async function loadHudSprites(){
     document.body.classList.add('hud-tex');
   }
   if(hudTex.hotbar){
-    hotbarEl.style.backgroundImage=`url(${hudTex.hotbar.src})`;
-    hotbarEl.style.backgroundSize='100% 100%';
-    hotbarEl.style.backgroundRepeat='no-repeat';
+    hotbarEl.style.background=`url(${hudTex.hotbar.src}) center/100% 100% no-repeat`;
     hotbarEl.style.border='none';
-    hotbarEl.style.background='none';
-    // рисуем хотбар-картинку как фон через canvas-обёртку: проще всего — подложка-картинка
-    hotbarEl.style.padding='6px';
-    hotbarEl.style.background=`url(${hudTex.hotbar.src})`;
-    hotbarEl.style.backgroundSize='100% 100%';
+    hotbarEl.style.padding='8px';
     hotbarEl.style.imageRendering='pixelated';
   }
-  if(hudTex.hotbar_selection){
-    slotEls.forEach(s=>{
-      s.el.style.outline='none';
-      s.el.classList.add('hudtex-slot');
-    });
-  }
+  renderHealth(); renderHunger(); renderAir(); renderHotbar();
   console.log('%c[HUD] спрайтов загружено: '+Object.values(hudTex).filter(Boolean).length,'color:#5c5');
 }
 
