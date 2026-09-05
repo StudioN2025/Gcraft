@@ -303,7 +303,7 @@
     <button id="btnSettings" class="mcbtn">Настройки</button>
     <button id="btnExit" class="mcbtn danger">Выйти</button>
   </div>
-  <div class="menuFooter">Три измерения • Пещеры и каньоны • Тени • Моды • Сид: <span id="seedLabel">—</span></div>
+  <div class="menuFooter">Три измерения • Каньоны • Тени • Моды • Сид: <span id="seedLabel">—</span></div>
 </div>
 
 <div id="createScreen" class="screen">
@@ -1118,7 +1118,6 @@ function terrainHeight(x,z){
   m = clamp((m-0.52)/0.48, 0, 1); m*=m;
   return clamp(Math.floor(9 + cont*18 + hills*14 + m*30), 4, 60);
 }
-/* пещеры: туннели + залы; воронки-входы на склонах */
 function isCave(x,y,z,h){
   if(y<4 || y>48) return false;
   const a = vnoise3(x*0.021, y*0.045, z*0.021) - 0.5;
@@ -1132,7 +1131,6 @@ function isCave(x,y,z,h){
   if(y<26 && y<h-8 && vnoise3(x*0.05+911.7, y*0.09, z*0.05-411.3) > 0.82) return true;
   return false;
 }
-/* каньон: 0 = нет, иначе нижняя Y выработки */
 function canyonColumn(x,z,h){
   if(h<=SEA+2) return 0;
   const s = Math.abs(fbm(x*0.0045+9000, z*0.0045-9000, 2)-0.5)*2;
@@ -1853,6 +1851,12 @@ function updateVoid(dt){
     player.voidT+=dt;
     if(player.voidT>0.4){ player.voidT=0; damage(4,'бездна'); }
   }
+  if(dim===2 && player.pos.y<-30 && !dead){
+    const ty=surfaceYAt(0,0);
+    player.pos.set(0.5, ty+2, 0.5);
+    player.vel.set(0,0,0); player.falling=false;
+    return;
+  }
   if(player.pos.y<-50){
     if(dim!==0) setDimension(0);
     player.pos.set(spawnPos.x, spawnPos.y+2, spawnPos.z);
@@ -2137,6 +2141,9 @@ function travelPortal(){
 function toEnd(){
   if(portalCd>0) return;
   setDimension(2);
+  // принудительно генерируем и отстраиваем зону острова ДО помещения игрока
+  for(let dx=-3;dx<=3;dx++) for(let dz=-3;dz<=3;dz++) getChunk(dx,dz);
+  for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++) buildChunk(chunks.get(ckey(dx,dz)));
   const ty=surfaceYAt(0,0);
   player.pos.set(0.5, ty, 0.5);
   portalCd=4;
@@ -4340,7 +4347,6 @@ function loop(now){
 
 /* ============ СТАРТ ============ */
 setSeedLabel();
-computeStronghold();
 spawnPos=findSpawn();
 player.pos.set(spawnPos.x,spawnPos.y,spawnPos.z);
 rebuildClouds();
